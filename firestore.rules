@@ -1,0 +1,274 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global safety net: deny everything by default
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isSuperAdmin() {
+      return isSignedIn() && request.auth.uid == 'PMXvtEnXBacRZDKoVBWUk1XFsmw1';
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isStringBounded(val, minLen, maxLen) {
+      return val is string && val.size() >= minLen && val.size() <= maxLen;
+    }
+
+    function isOptionalString(data, key, maxLen) {
+      return !(key in data) || (data[key] is string && data[key].size() <= maxLen);
+    }
+
+    function isStringListBounded(listVal, maxItems) {
+      return listVal is list && listVal.size() <= maxItems && (listVal.size() == 0 || listVal[0] is string);
+    }
+
+    function isValidTimestamp(ts) {
+      return ts is timestamp && ts <= request.time;
+    }
+
+    function isValidAppConfig(data) {
+      return isStringBounded(data.appTitle, 1, 100) &&
+             isStringBounded(data.welcomeBanner, 0, 500) &&
+             isOptionalString(data, 'dashboardSubtitle', 200) &&
+             data.irrigationIntervalDays is int &&
+             data.irrigationIntervalDays >= 1 &&
+             data.irrigationIntervalDays <= 60 &&
+             (!('workTypes' in data) || isStringListBounded(data.workTypes, 25)) &&
+             (!('fertilizerPresets' in data) || isStringListBounded(data.fertilizerPresets, 30)) &&
+             (!('sprayPresets' in data) || isStringListBounded(data.sprayPresets, 30)) &&
+             isValidTimestamp(data.updatedAt);
+    }
+
+    function isValidFeedingRecipe(data) {
+      return isStringBounded(data.title, 1, 160) &&
+             isStringBounded(data.category, 1, 80) &&
+             isStringBounded(data.summary, 0, 500) &&
+             isStringBounded(data.dosage, 0, 300) &&
+             isStringListBounded(data.steps, 25) &&
+             isOptionalString(data, 'tip', 400) &&
+             data.orderIndex is int &&
+             data.orderIndex >= 0 &&
+             data.orderIndex <= 1000 &&
+             isValidTimestamp(data.updatedAt);
+    }
+
+    function isValidUserProfile(data) {
+      return isStringBounded(data.userId, 1, 128) &&
+             isStringBounded(data.email, 0, 200) &&
+             isStringBounded(data.displayName, 1, 100) &&
+             isOptionalString(data, 'farmName', 120) &&
+             isValidTimestamp(data.createdAt) &&
+             isValidTimestamp(data.updatedAt);
+    }
+
+    function isValidFertilizerPurchase(data, userId) {
+      return data.userId == userId &&
+             data.dateMillis is int && data.dateMillis >= 0 &&
+             isStringBounded(data.dateLabel, 1, 40) &&
+             isStringBounded(data.fertilizerName, 1, 120) &&
+             isOptionalString(data, 'shopName', 120) &&
+             isOptionalString(data, 'quantity', 80) &&
+             (data.totalPrice is int || data.totalPrice is float) && data.totalPrice >= 0 &&
+             data.due is bool &&
+             isOptionalString(data, 'notes', 500) &&
+             data.trashed is bool &&
+             data.trashedAtMillis is int && data.trashedAtMillis >= 0 &&
+             isValidTimestamp(data.createdAt) &&
+             isValidTimestamp(data.updatedAt);
+    }
+
+    function isValidIrrigationLog(data, userId) {
+      return data.userId == userId &&
+             data.dateMillis is int && data.dateMillis >= 0 &&
+             isStringBounded(data.dateLabel, 1, 40) &&
+             isStringBounded(data.plotName, 1, 120) &&
+             (data.cost is int || data.cost is float) && data.cost >= 0 &&
+             data.nextIrrigationMillis is int && data.nextIrrigationMillis >= 0 &&
+             isStringBounded(data.nextIrrigationLabel, 1, 40) &&
+             isOptionalString(data, 'notes', 500) &&
+             data.trashed is bool &&
+             data.trashedAtMillis is int && data.trashedAtMillis >= 0 &&
+             isValidTimestamp(data.createdAt) &&
+             isValidTimestamp(data.updatedAt);
+    }
+
+    function isValidSprayLog(data, userId) {
+      return data.userId == userId &&
+             data.dateMillis is int && data.dateMillis >= 0 &&
+             isStringBounded(data.dateLabel, 1, 40) &&
+             isStringBounded(data.medicineName, 1, 140) &&
+             isStringBounded(data.dose, 0, 120) &&
+             (data.cost is int || data.cost is float) && data.cost >= 0 &&
+             isOptionalString(data, 'notes', 500) &&
+             data.trashed is bool &&
+             data.trashedAtMillis is int && data.trashedAtMillis >= 0 &&
+             isValidTimestamp(data.createdAt) &&
+             isValidTimestamp(data.updatedAt);
+    }
+
+    function isValidLaborLog(data, userId) {
+      return data.userId == userId &&
+             data.dateMillis is int && data.dateMillis >= 0 &&
+             isStringBounded(data.dateLabel, 1, 40) &&
+             data.workerCount is int && data.workerCount >= 1 && data.workerCount <= 1000 &&
+             (data.dailyWage is int || data.dailyWage is float) && data.dailyWage >= 0 &&
+             (data.totalCost is int || data.totalCost is float) && data.totalCost >= 0 &&
+             isStringBounded(data.workType, 1, 100) &&
+             isOptionalString(data, 'notes', 500) &&
+             data.trashed is bool &&
+             data.trashedAtMillis is int && data.trashedAtMillis >= 0 &&
+             isValidTimestamp(data.createdAt) &&
+             isValidTimestamp(data.updatedAt);
+    }
+
+    function isValidHarvestSale(data, userId) {
+      return data.userId == userId &&
+             data.dateMillis is int && data.dateMillis >= 0 &&
+             isStringBounded(data.dateLabel, 1, 40) &&
+             (data.weightKg is int || data.weightKg is float) && data.weightKg >= 0 &&
+             (!('pricePerKg' in data) || ((data.pricePerKg is int || data.pricePerKg is float) && data.pricePerKg >= 0)) &&
+             (data.totalAmount is int || data.totalAmount is float) && data.totalAmount >= 0 &&
+             isOptionalString(data, 'buyerName', 120) &&
+             isOptionalString(data, 'notes', 500) &&
+             data.trashed is bool &&
+             data.trashedAtMillis is int && data.trashedAtMillis >= 0 &&
+             isValidTimestamp(data.createdAt) &&
+             isValidTimestamp(data.updatedAt);
+    }
+
+    // Global App Config (non-PII): anyone can read, ONLY Super Admin can write
+    match /app_config/{configId} {
+      allow get: if isValidId(configId);
+      allow list: if true;
+      allow create, update: if isSuperAdmin() && isValidId(configId) &&
+        incoming().keys().hasAll(['appTitle', 'welcomeBanner', 'irrigationIntervalDays', 'updatedAt']) &&
+        incoming().keys().hasOnly(['appTitle', 'welcomeBanner', 'dashboardSubtitle', 'irrigationIntervalDays', 'workTypes', 'fertilizerPresets', 'sprayPresets', 'updatedAt']) &&
+        isValidAppConfig(incoming());
+      allow delete: if isSuperAdmin() && isValidId(configId);
+    }
+
+    // Feeding Guide Recipes (non-PII): anyone can read, ONLY Super Admin can write
+    match /feeding_recipes/{recipeId} {
+      allow get: if isValidId(recipeId);
+      allow list: if true;
+      allow create, update: if isSuperAdmin() && isValidId(recipeId) &&
+        incoming().keys().hasAll(['title', 'category', 'summary', 'dosage', 'steps', 'orderIndex', 'updatedAt']) &&
+        incoming().keys().hasOnly(['title', 'category', 'summary', 'dosage', 'steps', 'tip', 'orderIndex', 'updatedAt']) &&
+        isValidFeedingRecipe(incoming());
+      allow delete: if isSuperAdmin() && isValidId(recipeId);
+    }
+
+    // User Profiles & User-Isolated Farming Subcollections
+    match /users/{userId} {
+      allow get: if isValidId(userId) && (isOwner(userId) || isSuperAdmin());
+      allow list: if isSuperAdmin();
+      allow create: if isValidId(userId) && isOwner(userId) &&
+        incoming().keys().hasAll(['userId', 'email', 'displayName', 'createdAt', 'updatedAt']) &&
+        incoming().keys().hasOnly(['userId', 'email', 'displayName', 'farmName', 'createdAt', 'updatedAt']) &&
+        incoming().userId == userId &&
+        isValidUserProfile(incoming());
+      allow update: if isValidId(userId) && (isOwner(userId) || isSuperAdmin()) &&
+        incoming().userId == existing().userId &&
+        incoming().createdAt == existing().createdAt &&
+        isValidUserProfile(incoming()) &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'farmName', 'email', 'updatedAt']);
+      allow delete: if isValidId(userId) && isSuperAdmin();
+
+      match /fertilizer_purchases/{itemId} {
+        allow get: if isValidId(itemId) && isOwner(userId);
+        allow list: if isOwner(userId);
+        allow create: if isValidId(itemId) && isOwner(userId) &&
+          incoming().keys().hasAll(['userId', 'dateMillis', 'dateLabel', 'fertilizerName', 'totalPrice', 'due', 'trashed', 'trashedAtMillis', 'createdAt', 'updatedAt']) &&
+          incoming().keys().hasOnly(['userId', 'dateMillis', 'dateLabel', 'fertilizerName', 'shopName', 'quantity', 'totalPrice', 'due', 'notes', 'trashed', 'trashedAtMillis', 'createdAt', 'updatedAt']) &&
+          isValidFertilizerPurchase(incoming(), userId);
+        allow update: if isValidId(itemId) && isOwner(userId) &&
+          incoming().userId == existing().userId &&
+          incoming().createdAt == existing().createdAt &&
+          isValidFertilizerPurchase(incoming(), userId) &&
+          incoming().diff(existing()).affectedKeys().hasOnly(['dateMillis', 'dateLabel', 'fertilizerName', 'shopName', 'quantity', 'totalPrice', 'due', 'notes', 'trashed', 'trashedAtMillis', 'updatedAt']);
+        allow delete: if isValidId(itemId) && isOwner(userId);
+      }
+
+      match /irrigation_logs/{itemId} {
+        allow get: if isValidId(itemId) && isOwner(userId);
+        allow list: if isOwner(userId);
+        allow create: if isValidId(itemId) && isOwner(userId) &&
+          incoming().keys().hasAll(['userId', 'dateMillis', 'dateLabel', 'plotName', 'cost', 'nextIrrigationMillis', 'nextIrrigationLabel', 'trashed', 'trashedAtMillis', 'createdAt', 'updatedAt']) &&
+          incoming().keys().hasOnly(['userId', 'dateMillis', 'dateLabel', 'plotName', 'cost', 'nextIrrigationMillis', 'nextIrrigationLabel', 'notes', 'trashed', 'trashedAtMillis', 'createdAt', 'updatedAt']) &&
+          isValidIrrigationLog(incoming(), userId);
+        allow update: if isValidId(itemId) && isOwner(userId) &&
+          incoming().userId == existing().userId &&
+          incoming().createdAt == existing().createdAt &&
+          isValidIrrigationLog(incoming(), userId) &&
+          incoming().diff(existing()).affectedKeys().hasOnly(['dateMillis', 'dateLabel', 'plotName', 'cost', 'nextIrrigationMillis', 'nextIrrigationLabel', 'notes', 'trashed', 'trashedAtMillis', 'updatedAt']);
+        allow delete: if isValidId(itemId) && isOwner(userId);
+      }
+
+      match /spray_logs/{itemId} {
+        allow get: if isValidId(itemId) && isOwner(userId);
+        allow list: if isOwner(userId);
+        allow create: if isValidId(itemId) && isOwner(userId) &&
+          incoming().keys().hasAll(['userId', 'dateMillis', 'dateLabel', 'medicineName', 'dose', 'cost', 'trashed', 'trashedAtMillis', 'createdAt', 'updatedAt']) &&
+          incoming().keys().hasOnly(['userId', 'dateMillis', 'dateLabel', 'medicineName', 'dose', 'cost', 'notes', 'trashed', 'trashedAtMillis', 'createdAt', 'updatedAt']) &&
+          isValidSprayLog(incoming(), userId);
+        allow update: if isValidId(itemId) && isOwner(userId) &&
+          incoming().userId == existing().userId &&
+          incoming().createdAt == existing().createdAt &&
+          isValidSprayLog(incoming(), userId) &&
+          incoming().diff(existing()).affectedKeys().hasOnly(['dateMillis', 'dateLabel', 'medicineName', 'dose', 'cost', 'notes', 'trashed', 'trashedAtMillis', 'updatedAt']);
+        allow delete: if isValidId(itemId) && isOwner(userId);
+      }
+
+      match /labor_logs/{itemId} {
+        allow get: if isValidId(itemId) && isOwner(userId);
+        allow list: if isOwner(userId);
+        allow create: if isValidId(itemId) && isOwner(userId) &&
+          incoming().keys().hasAll(['userId', 'dateMillis', 'dateLabel', 'workerCount', 'dailyWage', 'totalCost', 'workType', 'trashed', 'trashedAtMillis', 'createdAt', 'updatedAt']) &&
+          incoming().keys().hasOnly(['userId', 'dateMillis', 'dateLabel', 'workerCount', 'dailyWage', 'totalCost', 'workType', 'notes', 'trashed', 'trashedAtMillis', 'createdAt', 'updatedAt']) &&
+          isValidLaborLog(incoming(), userId);
+        allow update: if isValidId(itemId) && isOwner(userId) &&
+          incoming().userId == existing().userId &&
+          incoming().createdAt == existing().createdAt &&
+          isValidLaborLog(incoming(), userId) &&
+          incoming().diff(existing()).affectedKeys().hasOnly(['dateMillis', 'dateLabel', 'workerCount', 'dailyWage', 'totalCost', 'workType', 'notes', 'trashed', 'trashedAtMillis', 'updatedAt']);
+        allow delete: if isValidId(itemId) && isOwner(userId);
+      }
+
+      match /harvest_sales/{itemId} {
+        allow get: if isValidId(itemId) && isOwner(userId);
+        allow list: if isOwner(userId);
+        allow create: if isValidId(itemId) && isOwner(userId) &&
+          incoming().keys().hasAll(['userId', 'dateMillis', 'dateLabel', 'weightKg', 'totalAmount', 'trashed', 'trashedAtMillis', 'createdAt', 'updatedAt']) &&
+          incoming().keys().hasOnly(['userId', 'dateMillis', 'dateLabel', 'weightKg', 'pricePerKg', 'totalAmount', 'buyerName', 'notes', 'trashed', 'trashedAtMillis', 'createdAt', 'updatedAt']) &&
+          isValidHarvestSale(incoming(), userId);
+        allow update: if isValidId(itemId) && isOwner(userId) &&
+          incoming().userId == existing().userId &&
+          incoming().createdAt == existing().createdAt &&
+          isValidHarvestSale(incoming(), userId) &&
+          incoming().diff(existing()).affectedKeys().hasOnly(['dateMillis', 'dateLabel', 'weightKg', 'pricePerKg', 'totalAmount', 'buyerName', 'notes', 'trashed', 'trashedAtMillis', 'updatedAt']);
+        allow delete: if isValidId(itemId) && isOwner(userId);
+      }
+    }
+  }
+}

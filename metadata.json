@@ -1,0 +1,6 @@
+{
+  "name": "স্ট্রবেরি চাষি বন্ধু",
+  "description": "স্ট্রবেরি চাষিদের সার, সেচ, স্প্রে, শ্রমিক মজুরি, ফসল বিক্রি, লাভ-ক্ষতি ও ক্যালকুলেটর অ্যাপ",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

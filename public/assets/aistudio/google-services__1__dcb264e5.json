@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "937138358825",
+    "project_id": "strawberrychashibondhu",
+    "storage_bucket": "strawberrychashibondhu.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:937138358825:android:c75a37215ba93adf92aa38",
+        "android_client_info": {
+          "package_name": "com.strawberry.chashibondhu"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBJrMDDlmEVMqu-fT95MxYRHVa18m2O9d4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

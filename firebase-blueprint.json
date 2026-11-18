@@ -1,0 +1,184 @@
+{
+  "entities": {
+    "AppConfig": {
+      "title": "AppConfig",
+      "description": "Global dynamic app configuration editable by Super Admin.",
+      "type": "object",
+      "properties": {
+        "appTitle": { "type": "string" },
+        "welcomeBanner": { "type": "string" },
+        "dashboardSubtitle": { "type": "string" },
+        "irrigationIntervalDays": { "type": "integer" },
+        "workTypes": { "type": "array" },
+        "fertilizerPresets": { "type": "array" },
+        "sprayPresets": { "type": "array" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["appTitle", "welcomeBanner", "irrigationIntervalDays", "updatedAt"]
+    },
+    "FeedingRecipe": {
+      "title": "FeedingRecipe",
+      "description": "Strawberry fertilizer and special feeding guide recipes managed by Super Admin.",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "category": { "type": "string" },
+        "summary": { "type": "string" },
+        "dosage": { "type": "string" },
+        "steps": { "type": "array" },
+        "tip": { "type": "string" },
+        "orderIndex": { "type": "integer" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["title", "category", "summary", "dosage", "steps", "orderIndex", "updatedAt"]
+    },
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Registered farmer account profile isolated per user.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "email": { "type": "string" },
+        "displayName": { "type": "string" },
+        "farmName": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "email", "displayName", "createdAt", "updatedAt"]
+    },
+    "FertilizerPurchase": {
+      "title": "FertilizerPurchase",
+      "description": "Farmer fertilizer purchase ledger entry with Cash/Due tracking.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "dateMillis": { "type": "integer" },
+        "dateLabel": { "type": "string" },
+        "fertilizerName": { "type": "string" },
+        "shopName": { "type": "string" },
+        "quantity": { "type": "string" },
+        "totalPrice": { "type": "number" },
+        "due": { "type": "boolean" },
+        "notes": { "type": "string" },
+        "trashed": { "type": "boolean" },
+        "trashedAtMillis": { "type": "integer" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "dateMillis", "dateLabel", "fertilizerName", "totalPrice", "due", "trashed", "trashedAtMillis", "createdAt", "updatedAt"]
+    },
+    "IrrigationLog": {
+      "title": "IrrigationLog",
+      "description": "Farmer irrigation record with next watering reminder.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "dateMillis": { "type": "integer" },
+        "dateLabel": { "type": "string" },
+        "plotName": { "type": "string" },
+        "cost": { "type": "number" },
+        "nextIrrigationMillis": { "type": "integer" },
+        "nextIrrigationLabel": { "type": "string" },
+        "notes": { "type": "string" },
+        "trashed": { "type": "boolean" },
+        "trashedAtMillis": { "type": "integer" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "dateMillis", "dateLabel", "plotName", "cost", "nextIrrigationMillis", "nextIrrigationLabel", "trashed", "trashedAtMillis", "createdAt", "updatedAt"]
+    },
+    "SprayLog": {
+      "title": "SprayLog",
+      "description": "Farmer medicine and fungicide spray log.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "dateMillis": { "type": "integer" },
+        "dateLabel": { "type": "string" },
+        "medicineName": { "type": "string" },
+        "dose": { "type": "string" },
+        "cost": { "type": "number" },
+        "notes": { "type": "string" },
+        "trashed": { "type": "boolean" },
+        "trashedAtMillis": { "type": "integer" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "dateMillis", "dateLabel", "medicineName", "dose", "cost", "trashed", "trashedAtMillis", "createdAt", "updatedAt"]
+    },
+    "LaborLog": {
+      "title": "LaborLog",
+      "description": "Farmer labor and weeding wage record.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "dateMillis": { "type": "integer" },
+        "dateLabel": { "type": "string" },
+        "workerCount": { "type": "integer" },
+        "dailyWage": { "type": "number" },
+        "totalCost": { "type": "number" },
+        "workType": { "type": "string" },
+        "notes": { "type": "string" },
+        "trashed": { "type": "boolean" },
+        "trashedAtMillis": { "type": "integer" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "dateMillis", "dateLabel", "workerCount", "dailyWage", "totalCost", "workType", "trashed", "trashedAtMillis", "createdAt", "updatedAt"]
+    },
+    "HarvestSale": {
+      "title": "HarvestSale",
+      "description": "Farmer daily strawberry harvest weight and sales record.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "dateMillis": { "type": "integer" },
+        "dateLabel": { "type": "string" },
+        "weightKg": { "type": "number" },
+        "pricePerKg": { "type": "number" },
+        "totalAmount": { "type": "number" },
+        "buyerName": { "type": "string" },
+        "notes": { "type": "string" },
+        "trashed": { "type": "boolean" },
+        "trashedAtMillis": { "type": "integer" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "dateMillis", "dateLabel", "weightKg", "totalAmount", "trashed", "trashedAtMillis", "createdAt", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/app_config/{configId}": {
+      "schema": { "$ref": "#/entities/AppConfig" },
+      "description": "Global dynamic app configuration editable only by Super Admin."
+    },
+    "/feeding_recipes/{recipeId}": {
+      "schema": { "$ref": "#/entities/FeedingRecipe" },
+      "description": "Strawberry feeding guide recipes managed by Super Admin."
+    },
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "Registered farmer profile."
+    },
+    "/users/{userId}/fertilizer_purchases/{itemId}": {
+      "schema": { "$ref": "#/entities/FertilizerPurchase" },
+      "description": "User-isolated fertilizer purchase records."
+    },
+    "/users/{userId}/irrigation_logs/{itemId}": {
+      "schema": { "$ref": "#/entities/IrrigationLog" },
+      "description": "User-isolated irrigation logs."
+    },
+    "/users/{userId}/spray_logs/{itemId}": {
+      "schema": { "$ref": "#/entities/SprayLog" },
+      "description": "User-isolated spray logs."
+    },
+    "/users/{userId}/labor_logs/{itemId}": {
+      "schema": { "$ref": "#/entities/LaborLog" },
+      "description": "User-isolated labor and weeding logs."
+    },
+    "/users/{userId}/harvest_sales/{itemId}": {
+      "schema": { "$ref": "#/entities/HarvestSale" },
+      "description": "User-isolated strawberry harvest sales."
+    }
+  }
+}
