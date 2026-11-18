@@ -1,6 +1,7 @@
 package com.example.ui.screens
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -42,6 +43,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -68,6 +70,7 @@ import com.example.util.BengaliFormatters
 @Composable
 fun LaborScreen(
     state: FarmDashboardState,
+    initialWorkFilter: String? = null,
     copiedCalculatorAmount: String?,
     canUndo: Boolean,
     canRedo: Boolean,
@@ -78,14 +81,21 @@ fun LaborScreen(
     onTrashLabor: (LaborLog) -> Unit,
     onClearCopiedAmount: () -> Unit
 ) {
+    var selectedFilter by rememberSaveable(initialWorkFilter) { mutableStateOf(initialWorkFilter) }
     var showDialog by remember { mutableStateOf(false) }
     var editingItem by remember { mutableStateOf<LaborLog?>(null) }
+
+    val filteredLabors = remember(state.labors, selectedFilter) {
+        if (selectedFilter.isNullOrBlank()) state.labors
+        else state.labors.filter { it.workType == selectedFilter }
+    }
+    val filteredCost = remember(filteredLabors) { filteredLabors.sumOf { it.totalCost } }
 
     Scaffold(
         containerColor = BgOffWhite,
         topBar = {
             StrawberryTopBar(
-                title = "শ্রমিক ও নিড়ানি হিসাব",
+                title = if (selectedFilter == "নিড়ানি দেওয়া") "নিড়ানি ও শ্রমিক হিসাব" else "শ্রমিক ও নিড়ানি হিসাব",
                 canUndo = canUndo,
                 canRedo = canRedo,
                 onUndo = onUndo,
@@ -105,7 +115,10 @@ fun LaborScreen(
                 Row(modifier = Modifier.padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Default.Add, contentDescription = "শ্রমিক যোগ")
                     Spacer(modifier = Modifier.width(6.dp))
-                    Text("শ্রমিক যোগ করুন", fontWeight = FontWeight.Bold)
+                    Text(
+                        text = if (selectedFilter == "নিড়ানি দেওয়া") "নিড়ানি যোগ করুন" else "শ্রমিক যোগ করুন",
+                        fontWeight = FontWeight.Bold
+                    )
                 }
             }
         }
@@ -132,9 +145,14 @@ fun LaborScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Column {
-                            Text("মোট শ্রমিক মজুরি", color = TextSecondaryDark, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
                             Text(
-                                text = BengaliFormatters.formatTaka(state.summary.laborTotal),
+                                text = if (selectedFilter.isNullOrBlank()) "মোট শ্রমিক মজুরি" else "$selectedFilter খরচ",
+                                color = TextSecondaryDark,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            Text(
+                                text = BengaliFormatters.formatTaka(filteredCost),
                                 color = TextDarkBlack,
                                 fontSize = 26.sp,
                                 fontWeight = FontWeight.Bold
@@ -145,7 +163,7 @@ fun LaborScreen(
                             color = SurfacePureWhite,
                             border = BorderStroke(1.dp, PurpleBorder)
                         ) {
-                            val totalWorkers = state.labors.sumOf { it.workerCount }
+                            val totalWorkers = filteredLabors.sumOf { it.workerCount }
                             Text(
                                 text = "মোট ${BengaliFormatters.formatNumber(totalWorkers.toDouble())} জন-দিন",
                                 color = TextDarkBlack,
@@ -157,18 +175,61 @@ fun LaborScreen(
                 }
             }
 
-            if (state.labors.isEmpty()) {
+            // Work-type Filter Chips
+            item {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    FilterChip(
+                        selected = selectedFilter == null,
+                        onClick = { selectedFilter = null },
+                        label = { Text("সব কাজ", color = TextDarkBlack, fontWeight = FontWeight.Bold) },
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = PurpleSoftBg,
+                            containerColor = SurfacePureWhite
+                        ),
+                        border = FilterChipDefaults.filterChipBorder(
+                            enabled = true,
+                            selected = selectedFilter == null,
+                            borderColor = BorderSlate,
+                            selectedBorderColor = PurpleAccent
+                        )
+                    )
+                    state.appConfig.workTypes.forEach { workType ->
+                        FilterChip(
+                            selected = selectedFilter == workType,
+                            onClick = { selectedFilter = workType },
+                            label = { Text(workType, color = TextDarkBlack, fontWeight = FontWeight.SemiBold) },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = PurpleSoftBg,
+                                containerColor = SurfacePureWhite
+                            ),
+                            border = FilterChipDefaults.filterChipBorder(
+                                enabled = true,
+                                selected = selectedFilter == workType,
+                                borderColor = BorderSlate,
+                                selectedBorderColor = PurpleAccent
+                            )
+                        )
+                    }
+                }
+            }
+
+            if (filteredLabors.isEmpty()) {
                 item {
                     EmptyStateCard(
                         icon = Icons.Default.Engineering,
-                        title = "এখনো কোনো শ্রমিকের হিসাব নেই",
+                        title = if (selectedFilter.isNullOrBlank()) "এখনো কোনো শ্রমিকের হিসাব নেই" else "$selectedFilter-এর কোনো হিসাব নেই",
                         subtitle = "নিড়ানি, সার দেওয়া, মালচিং বা ফল তোলার শ্রমিক সংখ্যা ও হাজিরা এখানে লিখুন।",
-                        actionLabel = "শ্রমিক হিসাব যোগ করুন",
+                        actionLabel = if (selectedFilter == "নিড়ানি দেওয়া") "নিড়ানির হিসাব যোগ করুন" else "শ্রমিক হিসাব যোগ করুন",
                         onAction = { editingItem = null; showDialog = true }
                     )
                 }
             } else {
-                items(state.labors, key = { it.id }) { item ->
+                items(filteredLabors, key = { it.id }) { item ->
                     Card(
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(20.dp),
@@ -230,6 +291,7 @@ fun LaborScreen(
     if (showDialog) {
         LaborFormDialog(
             initial = editingItem,
+            defaultWorkType = selectedFilter,
             workTypes = state.appConfig.workTypes,
             copiedCalculatorAmount = copiedCalculatorAmount,
             onClearCopiedAmount = onClearCopiedAmount,
@@ -246,6 +308,7 @@ fun LaborScreen(
 @Composable
 private fun LaborFormDialog(
     initial: LaborLog?,
+    defaultWorkType: String?,
     workTypes: List<String>,
     copiedCalculatorAmount: String?,
     onClearCopiedAmount: () -> Unit,
@@ -255,7 +318,13 @@ private fun LaborFormDialog(
     var dateMillis by remember { mutableLongStateOf(initial?.dateMillis ?: BengaliFormatters.startOfTodayMillis()) }
     var workerCountText by remember { mutableStateOf(initial?.workerCount?.toString() ?: "1") }
     var dailyWageText by remember { mutableStateOf(initial?.dailyWage?.let { BengaliFormatters.formatNumber(it, false) } ?: "500") }
-    var selectedWorkType by remember { mutableStateOf(initial?.workType ?: workTypes.firstOrNull().orEmpty().ifBlank { "নিড়ানি দেওয়া" }) }
+    var selectedWorkType by remember {
+        mutableStateOf(
+            initial?.workType
+                ?: defaultWorkType?.takeIf { it.isNotBlank() }
+                ?: workTypes.firstOrNull().orEmpty().ifBlank { "নিড়ানি দেওয়া" }
+        )
+    }
     var notes by remember { mutableStateOf(initial?.notes.orEmpty()) }
     var errorText by remember { mutableStateOf<String?>(null) }
 
@@ -305,7 +374,6 @@ private fun LaborFormDialog(
                     }
                 }
 
-                // Worker count with big - / + buttons
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,

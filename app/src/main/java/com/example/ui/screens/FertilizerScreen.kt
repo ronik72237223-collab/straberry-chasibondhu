@@ -25,8 +25,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.AutoStories
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Eco
+import androidx.compose.material.icons.filled.Event
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Lightbulb
@@ -57,6 +59,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -67,6 +70,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.model.CustomFeedingPlan
 import com.example.model.FeedingRecipe
 import com.example.model.FertilizerPurchase
 import com.example.ui.theme.AmberBorder
@@ -77,6 +81,7 @@ import com.example.ui.theme.BorderSoft
 import com.example.ui.theme.EmeraldBorder
 import com.example.ui.theme.EmeraldPrimary
 import com.example.ui.theme.EmeraldSoftBg
+import com.example.ui.theme.HealthyCardGreenBg
 import com.example.ui.theme.StrawberryBorder
 import com.example.ui.theme.StrawberryRed
 import com.example.ui.theme.StrawberrySoftBg
@@ -89,20 +94,26 @@ import com.example.util.BengaliFormatters
 @Composable
 fun FertilizerScreen(
     state: FarmDashboardState,
+    initialTab: Int = 0,
     copiedCalculatorAmount: String?,
     canUndo: Boolean,
     canRedo: Boolean,
     onUndo: () -> Unit,
     onRedo: () -> Unit,
     onBack: () -> Unit,
+    onOpenArticles: () -> Unit,
+    onSaveFeedingPlan: (CustomFeedingPlan?, CustomFeedingPlan) -> Unit,
+    onTrashFeedingPlan: (CustomFeedingPlan) -> Unit,
     onSavePurchase: (FertilizerPurchase?, FertilizerPurchase) -> Unit,
     onTrashPurchase: (FertilizerPurchase) -> Unit,
     onPayDue: (FertilizerPurchase) -> Unit,
     onClearCopiedAmount: () -> Unit
 ) {
-    var selectedTab by remember { mutableIntStateOf(0) }
+    var selectedTab by rememberSaveable(initialTab) { mutableIntStateOf(initialTab.coerceIn(0, 1)) }
     var showFormDialog by remember { mutableStateOf(false) }
     var editingItem by remember { mutableStateOf<FertilizerPurchase?>(null) }
+    var showPlanDialog by remember { mutableStateOf(false) }
+    var editingPlan by remember { mutableStateOf<CustomFeedingPlan?>(null) }
 
     Scaffold(
         containerColor = BgOffWhite,
@@ -117,26 +128,32 @@ fun FertilizerScreen(
             )
         },
         floatingActionButton = {
-            if (selectedTab == 1) {
-                FloatingActionButton(
-                    onClick = {
+            FloatingActionButton(
+                onClick = {
+                    if (selectedTab == 0) {
+                        editingPlan = null
+                        showPlanDialog = true
+                    } else {
                         editingItem = null
                         showFormDialog = true
-                    },
-                    containerColor = EmeraldPrimary,
-                    contentColor = Color.White,
-                    modifier = Modifier
-                        .padding(bottom = 72.dp)
-                        .testTag("add_fertilizer_fab")
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 16.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(Icons.Default.Add, contentDescription = "নতুন সার")
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text("সার কেনা যোগ করুন", fontWeight = FontWeight.Bold)
                     }
+                },
+                containerColor = EmeraldPrimary,
+                contentColor = Color.White,
+                modifier = Modifier
+                    .padding(bottom = 72.dp)
+                    .testTag(if (selectedTab == 0) "add_feeding_plan_fab" else "add_fertilizer_fab")
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(Icons.Default.Add, contentDescription = "যোগ করুন")
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = if (selectedTab == 0) "নিজের সার ডোজ যোগ" else "সার কেনা যোগ করুন",
+                        fontWeight = FontWeight.Bold
+                    )
                 }
             }
         }
@@ -193,9 +210,104 @@ fun FertilizerScreen(
             if (selectedTab == 0) {
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 14.dp, bottom = 96.dp),
+                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 14.dp, bottom = 140.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
+                    // Farmer's Own Custom Feeding Plan Action Card
+                    item {
+                        Button(
+                            onClick = {
+                                editingPlan = null
+                                showPlanDialog = true
+                            },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = EmeraldPrimary,
+                                contentColor = Color.White
+                            ),
+                            shape = RoundedCornerShape(16.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(min = 52.dp)
+                                .testTag("add_custom_plan_button")
+                        ) {
+                            Icon(Icons.Default.Add, contentDescription = "নিজের সার ডোজ যোগ")
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("নিজের সার দেওয়ার ডোজ ও তারিখ লিখুন", fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+
+                    // Farmer's Custom Feeding Plans List
+                    if (state.customFeedingPlans.isNotEmpty()) {
+                        item {
+                            Text(
+                                text = "আমার নিজের সার দেওয়ার তালিকা (${BengaliFormatters.formatNumber(state.customFeedingPlans.size.toDouble())})",
+                                style = MaterialTheme.typography.titleMedium.copy(
+                                    color = TextDarkBlack,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            )
+                        }
+                        items(state.customFeedingPlans, key = { "plan_${it.id}" }) { plan ->
+                            CustomFeedingPlanCard(
+                                plan = plan,
+                                onEdit = {
+                                    editingPlan = plan
+                                    showPlanDialog = true
+                                },
+                                onDelete = { onTrashFeedingPlan(plan) }
+                            )
+                        }
+                    }
+
+                    // Shortcut to Full Articles Screen
+                    item {
+                        Card(
+                            onClick = onOpenArticles,
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(18.dp),
+                            colors = CardDefaults.cardColors(containerColor = HealthyCardGreenBg),
+                            border = BorderStroke(1.5.dp, EmeraldBorder)
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(14.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.AutoStories,
+                                    contentDescription = "কৃষি আর্টিকেল",
+                                    tint = EmeraldPrimary,
+                                    modifier = Modifier.size(28.dp)
+                                )
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = "কৃষি পরামর্শ ও বিশেষ আর্টিকেল",
+                                        color = TextDarkBlack,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 15.sp
+                                    )
+                                    Text(
+                                        text = "অ্যাডমিনের নতুন পরামর্শ ও ফল বড় করার টিপস পড়ুন →",
+                                        color = TextSecondaryDark,
+                                        fontSize = 13.sp
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    item {
+                        Text(
+                            text = "আদর্শ সার ও বিশেষ খাবার দেওয়ার নিয়ম",
+                            style = MaterialTheme.typography.titleMedium.copy(
+                                color = TextDarkBlack,
+                                fontWeight = FontWeight.Bold
+                            )
+                        )
+                    }
+
                     items(state.recipes, key = { it.id }) { recipe ->
                         FeedingRecipeCard(recipe = recipe)
                     }
@@ -305,6 +417,17 @@ fun FertilizerScreen(
         }
     }
 
+    if (showPlanDialog) {
+        CustomFeedingPlanDialog(
+            initial = editingPlan,
+            onDismiss = { showPlanDialog = false },
+            onSave = { newPlan ->
+                onSaveFeedingPlan(editingPlan, newPlan)
+                showPlanDialog = false
+            }
+        )
+    }
+
     if (showFormDialog) {
         FertilizerPurchaseDialog(
             initial = editingItem,
@@ -318,6 +441,262 @@ fun FertilizerScreen(
             }
         )
     }
+}
+
+@Composable
+private fun CustomFeedingPlanCard(
+    plan: CustomFeedingPlan,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = SurfacePureWhite),
+        border = BorderStroke(1.5.dp, EmeraldPrimary)
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Top
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    if (plan.method.isNotBlank()) {
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = EmeraldSoftBg,
+                            border = BorderStroke(1.dp, EmeraldBorder)
+                        ) {
+                            Text(
+                                text = plan.method,
+                                color = EmeraldPrimary,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(4.dp))
+                    }
+                    Text(
+                        text = plan.title,
+                        style = MaterialTheme.typography.titleMedium.copy(
+                            color = TextDarkBlack,
+                            fontWeight = FontWeight.Bold
+                        )
+                    )
+                    Text(
+                        text = "প্রয়োগের তারিখ: ${plan.dateLabel}",
+                        style = MaterialTheme.typography.bodySmall.copy(color = TextSecondaryDark)
+                    )
+                }
+            }
+
+            if (plan.dosage.isNotBlank()) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Surface(
+                    shape = RoundedCornerShape(10.dp),
+                    color = BgOffWhite,
+                    border = BorderStroke(1.dp, BorderSoft),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        text = "পরিমাণ / ডোজ: ${plan.dosage}",
+                        style = MaterialTheme.typography.bodyMedium.copy(
+                            color = TextDarkBlack,
+                            fontWeight = FontWeight.SemiBold
+                        ),
+                        modifier = Modifier.padding(10.dp)
+                    )
+                }
+            }
+
+            if (plan.nextDateLabel.isNotBlank()) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Surface(
+                    shape = RoundedCornerShape(10.dp),
+                    color = AmberSoftBg,
+                    border = BorderStroke(1.dp, AmberBorder)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Event,
+                            contentDescription = "পরবর্তী সার",
+                            tint = TextDarkBlack,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "পরবর্তী সার দেওয়ার তারিখ: ${plan.nextDateLabel}",
+                            style = MaterialTheme.typography.labelMedium.copy(
+                                color = TextDarkBlack,
+                                fontWeight = FontWeight.Bold
+                            )
+                        )
+                    }
+                }
+            }
+
+            if (plan.notes.isNotBlank()) {
+                Spacer(modifier = Modifier.height(6.dp))
+                Text(
+                    text = "নোট: ${plan.notes}",
+                    style = MaterialTheme.typography.bodySmall.copy(color = TextSecondaryDark)
+                )
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                InlineEditDeleteRow(onEdit = onEdit, onDelete = onDelete)
+            }
+        }
+    }
+}
+
+@Composable
+private fun CustomFeedingPlanDialog(
+    initial: CustomFeedingPlan?,
+    onDismiss: () -> Unit,
+    onSave: (CustomFeedingPlan) -> Unit
+) {
+    val methods = listOf("পকেট গঞ্জ", "সরিষার খৈল তরল", "হরলিক্স ও অনুখাদ্য", "গোড়ায় শুকনো সার", "পাতার স্প্রে")
+    var dateMillis by remember { mutableLongStateOf(initial?.dateMillis ?: BengaliFormatters.startOfTodayMillis()) }
+    var nextDateMillis by remember { mutableLongStateOf(initial?.nextDateMillis ?: BengaliFormatters.addDays(dateMillis, 10)) }
+    var title by remember { mutableStateOf(initial?.title.orEmpty()) }
+    var method by remember { mutableStateOf(initial?.method ?: methods.first()) }
+    var dosage by remember { mutableStateOf(initial?.dosage.orEmpty()) }
+    var notes by remember { mutableStateOf(initial?.notes.orEmpty()) }
+    var errorText by remember { mutableStateOf<String?>(null) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = SurfacePureWhite,
+        title = {
+            Text(
+                text = if (initial == null) "নিজের সার দেওয়ার ডোজ যোগ" else "সার ডোজ সম্পাদনা",
+                style = MaterialTheme.typography.titleLarge.copy(color = TextDarkBlack, fontWeight = FontWeight.Bold)
+            )
+        },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                DateSelectorRow(
+                    selectedMillis = dateMillis,
+                    onDateSelected = { picked ->
+                        dateMillis = picked
+                    }
+                )
+
+                Text(
+                    text = "পদ্ধতি বাছাই করুন:",
+                    style = MaterialTheme.typography.labelMedium.copy(color = TextSecondaryDark)
+                )
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    methods.forEach { m ->
+                        FilterChip(
+                            selected = method == m,
+                            onClick = {
+                                method = m
+                                if (title.isBlank()) title = "$m প্রয়োগ"
+                            },
+                            label = { Text(m, color = TextDarkBlack, fontWeight = FontWeight.Medium) },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = EmeraldSoftBg,
+                                containerColor = BgOffWhite
+                            ),
+                            border = FilterChipDefaults.filterChipBorder(
+                                enabled = true,
+                                selected = method == m,
+                                borderColor = BorderSlate,
+                                selectedBorderColor = EmeraldPrimary
+                            )
+                        )
+                    }
+                }
+
+                HighContrastTextField(
+                    value = title,
+                    onValueChange = { title = it; errorText = null },
+                    label = "সার বা খাবারের নাম *",
+                    placeholder = "যেমন: পকেট গঞ্জ (ইউরিয়া + টিএসপি + বোরন)",
+                    testTag = "feeding_plan_title_input"
+                )
+                HighContrastTextField(
+                    value = dosage,
+                    onValueChange = { dosage = it },
+                    label = "পরিমাণ / ডোজ",
+                    placeholder = "যেমন: প্রতি গাছে ৫ গ্রাম বা ১৬ লিটারে ৫০ গ্রাম",
+                    singleLine = false,
+                    maxLines = 2
+                )
+
+                NextDateSelectorRow(
+                    title = "পরবর্তী সার দেওয়ার তারিখ",
+                    baseDateMillis = dateMillis,
+                    nextDateMillis = nextDateMillis,
+                    quickDayOffsets = listOf(7, 10, 14, 21),
+                    allowClear = true,
+                    onNextDateSelected = { nextDateMillis = it }
+                )
+
+                HighContrastTextField(
+                    value = notes,
+                    onValueChange = { notes = it },
+                    label = "অতিরিক্ত নোট (ঐচ্ছিক)",
+                    singleLine = false,
+                    maxLines = 2
+                )
+                if (!errorText.isNullOrBlank()) {
+                    Text(errorText!!, color = StrawberryRed, fontWeight = FontWeight.Bold)
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    if (title.isBlank()) {
+                        errorText = "সার বা খাবারের নাম লিখুন।"
+                        return@Button
+                    }
+                    onSave(
+                        CustomFeedingPlan(
+                            title = title.trim(),
+                            method = method.trim(),
+                            dosage = dosage.trim(),
+                            dateMillis = dateMillis,
+                            dateLabel = BengaliFormatters.formatDateLabel(dateMillis),
+                            nextDateMillis = nextDateMillis,
+                            nextDateLabel = if (nextDateMillis > 0L) BengaliFormatters.formatDateLabel(nextDateMillis) else "",
+                            notes = notes.trim()
+                        )
+                    )
+                },
+                colors = ButtonDefaults.buttonColors(containerColor = EmeraldPrimary, contentColor = Color.White),
+                modifier = Modifier
+                    .heightIn(min = 48.dp)
+                    .testTag("save_feeding_plan_button")
+            ) {
+                Text("সংরক্ষণ করুন", fontWeight = FontWeight.Bold)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss, modifier = Modifier.heightIn(min = 48.dp)) {
+                Text("বাতিল", color = TextDarkBlack)
+            }
+        }
+    )
 }
 
 @Composable
@@ -701,7 +1080,6 @@ private fun FertilizerPurchaseDialog(
                     testTag = "fert_price_input"
                 )
 
-                // Big Cash vs Due Toggle
                 Text(
                     text = "পরিশোধের ধরন:",
                     style = MaterialTheme.typography.titleSmall.copy(color = TextDarkBlack, fontWeight = FontWeight.Bold)

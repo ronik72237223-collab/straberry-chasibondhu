@@ -32,6 +32,43 @@
       },
       "required": ["title", "category", "summary", "dosage", "steps", "orderIndex", "updatedAt"]
     },
+    "FarmArticle": {
+      "title": "FarmArticle",
+      "description": "Detailed Bengali strawberry farming articles and advice published by Super Admin.",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "category": { "type": "string" },
+        "summary": { "type": "string" },
+        "body": { "type": "string" },
+        "publishedDateLabel": { "type": "string" },
+        "orderIndex": { "type": "integer" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["title", "category", "body", "orderIndex", "createdAt", "updatedAt"]
+    },
+    "CustomFeedingPlan": {
+      "title": "CustomFeedingPlan",
+      "description": "Farmer's personal custom fertilizer and feeding dosage schedule isolated per user.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "title": { "type": "string" },
+        "method": { "type": "string" },
+        "dosage": { "type": "string" },
+        "dateMillis": { "type": "integer" },
+        "dateLabel": { "type": "string" },
+        "nextDateMillis": { "type": "integer" },
+        "nextDateLabel": { "type": "string" },
+        "notes": { "type": "string" },
+        "trashed": { "type": "boolean" },
+        "trashedAtMillis": { "type": "integer" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "title", "dateMillis", "dateLabel", "trashed", "trashedAtMillis", "createdAt", "updatedAt"]
+    },
     "UserProfile": {
       "title": "UserProfile",
       "description": "Registered farmer account profile isolated per user.",
@@ -89,7 +126,7 @@
     },
     "SprayLog": {
       "title": "SprayLog",
-      "description": "Farmer medicine and fungicide spray log.",
+      "description": "Farmer medicine and fungicide spray log with next spray date.",
       "type": "object",
       "properties": {
         "userId": { "type": "string" },
@@ -98,6 +135,8 @@
         "medicineName": { "type": "string" },
         "dose": { "type": "string" },
         "cost": { "type": "number" },
+        "nextSprayMillis": { "type": "integer" },
+        "nextSprayLabel": { "type": "string" },
         "notes": { "type": "string" },
         "trashed": { "type": "boolean" },
         "trashedAtMillis": { "type": "integer" },
@@ -156,9 +195,17 @@
       "schema": { "$ref": "#/entities/FeedingRecipe" },
       "description": "Strawberry feeding guide recipes managed by Super Admin."
     },
+    "/articles/{articleId}": {
+      "schema": { "$ref": "#/entities/FarmArticle" },
+      "description": "Bengali strawberry farming articles and guides published by Super Admin."
+    },
     "/users/{userId}": {
       "schema": { "$ref": "#/entities/UserProfile" },
       "description": "Registered farmer profile."
+    },
+    "/users/{userId}/custom_feeding_plans/{itemId}": {
+      "schema": { "$ref": "#/entities/CustomFeedingPlan" },
+      "description": "User-isolated custom fertilizer feeding plans."
     },
     "/users/{userId}/fertilizer_purchases/{itemId}": {
       "schema": { "$ref": "#/entities/FertilizerPurchase" },

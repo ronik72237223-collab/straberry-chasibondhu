@@ -73,6 +73,35 @@ service cloud.firestore {
              isValidTimestamp(data.updatedAt);
     }
 
+    function isValidFarmArticle(data) {
+      return isStringBounded(data.title, 1, 200) &&
+             isStringBounded(data.category, 1, 80) &&
+             isOptionalString(data, 'summary', 500) &&
+             isStringBounded(data.body, 1, 5000) &&
+             isOptionalString(data, 'publishedDateLabel', 60) &&
+             data.orderIndex is int &&
+             data.orderIndex >= 0 &&
+             data.orderIndex <= 2000 &&
+             isValidTimestamp(data.createdAt) &&
+             isValidTimestamp(data.updatedAt);
+    }
+
+    function isValidCustomFeedingPlan(data, userId) {
+      return data.userId == userId &&
+             isStringBounded(data.title, 1, 160) &&
+             isOptionalString(data, 'method', 120) &&
+             isOptionalString(data, 'dosage', 300) &&
+             data.dateMillis is int && data.dateMillis >= 0 &&
+             isStringBounded(data.dateLabel, 1, 40) &&
+             (!('nextDateMillis' in data) || (data.nextDateMillis is int && data.nextDateMillis >= 0)) &&
+             isOptionalString(data, 'nextDateLabel', 40) &&
+             isOptionalString(data, 'notes', 500) &&
+             data.trashed is bool &&
+             data.trashedAtMillis is int && data.trashedAtMillis >= 0 &&
+             isValidTimestamp(data.createdAt) &&
+             isValidTimestamp(data.updatedAt);
+    }
+
     function isValidUserProfile(data) {
       return isStringBounded(data.userId, 1, 128) &&
              isStringBounded(data.email, 0, 200) &&
@@ -120,6 +149,8 @@ service cloud.firestore {
              isStringBounded(data.medicineName, 1, 140) &&
              isStringBounded(data.dose, 0, 120) &&
              (data.cost is int || data.cost is float) && data.cost >= 0 &&
+             (!('nextSprayMillis' in data) || (data.nextSprayMillis is int && data.nextSprayMillis >= 0)) &&
+             isOptionalString(data, 'nextSprayLabel', 40) &&
              isOptionalString(data, 'notes', 500) &&
              data.trashed is bool &&
              data.trashedAtMillis is int && data.trashedAtMillis >= 0 &&
@@ -179,6 +210,22 @@ service cloud.firestore {
       allow delete: if isSuperAdmin() && isValidId(recipeId);
     }
 
+    // Admin Published Articles (non-PII): anyone can read, ONLY Super Admin can write
+    match /articles/{articleId} {
+      allow get: if isValidId(articleId);
+      allow list: if true;
+      allow create: if isSuperAdmin() && isValidId(articleId) &&
+        incoming().keys().hasAll(['title', 'category', 'body', 'orderIndex', 'createdAt', 'updatedAt']) &&
+        incoming().keys().hasOnly(['title', 'category', 'summary', 'body', 'publishedDateLabel', 'orderIndex', 'createdAt', 'updatedAt']) &&
+        isValidFarmArticle(incoming());
+      allow update: if isSuperAdmin() && isValidId(articleId) &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().keys().hasAll(['title', 'category', 'body', 'orderIndex', 'createdAt', 'updatedAt']) &&
+        incoming().keys().hasOnly(['title', 'category', 'summary', 'body', 'publishedDateLabel', 'orderIndex', 'createdAt', 'updatedAt']) &&
+        isValidFarmArticle(incoming());
+      allow delete: if isSuperAdmin() && isValidId(articleId);
+    }
+
     // User Profiles & User-Isolated Farming Subcollections
     match /users/{userId} {
       allow get: if isValidId(userId) && (isOwner(userId) || isSuperAdmin());
@@ -194,6 +241,21 @@ service cloud.firestore {
         isValidUserProfile(incoming()) &&
         incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'farmName', 'email', 'updatedAt']);
       allow delete: if isValidId(userId) && isSuperAdmin();
+
+      match /custom_feeding_plans/{itemId} {
+        allow get: if isValidId(itemId) && isOwner(userId);
+        allow list: if isOwner(userId);
+        allow create: if isValidId(itemId) && isOwner(userId) &&
+          incoming().keys().hasAll(['userId', 'title', 'dateMillis', 'dateLabel', 'trashed', 'trashedAtMillis', 'createdAt', 'updatedAt']) &&
+          incoming().keys().hasOnly(['userId', 'title', 'method', 'dosage', 'dateMillis', 'dateLabel', 'nextDateMillis', 'nextDateLabel', 'notes', 'trashed', 'trashedAtMillis', 'createdAt', 'updatedAt']) &&
+          isValidCustomFeedingPlan(incoming(), userId);
+        allow update: if isValidId(itemId) && isOwner(userId) &&
+          incoming().userId == existing().userId &&
+          incoming().createdAt == existing().createdAt &&
+          isValidCustomFeedingPlan(incoming(), userId) &&
+          incoming().diff(existing()).affectedKeys().hasOnly(['title', 'method', 'dosage', 'dateMillis', 'dateLabel', 'nextDateMillis', 'nextDateLabel', 'notes', 'trashed', 'trashedAtMillis', 'updatedAt']);
+        allow delete: if isValidId(itemId) && isOwner(userId);
+      }
 
       match /fertilizer_purchases/{itemId} {
         allow get: if isValidId(itemId) && isOwner(userId);
@@ -230,13 +292,13 @@ service cloud.firestore {
         allow list: if isOwner(userId);
         allow create: if isValidId(itemId) && isOwner(userId) &&
           incoming().keys().hasAll(['userId', 'dateMillis', 'dateLabel', 'medicineName', 'dose', 'cost', 'trashed', 'trashedAtMillis', 'createdAt', 'updatedAt']) &&
-          incoming().keys().hasOnly(['userId', 'dateMillis', 'dateLabel', 'medicineName', 'dose', 'cost', 'notes', 'trashed', 'trashedAtMillis', 'createdAt', 'updatedAt']) &&
+          incoming().keys().hasOnly(['userId', 'dateMillis', 'dateLabel', 'medicineName', 'dose', 'cost', 'nextSprayMillis', 'nextSprayLabel', 'notes', 'trashed', 'trashedAtMillis', 'createdAt', 'updatedAt']) &&
           isValidSprayLog(incoming(), userId);
         allow update: if isValidId(itemId) && isOwner(userId) &&
           incoming().userId == existing().userId &&
           incoming().createdAt == existing().createdAt &&
           isValidSprayLog(incoming(), userId) &&
-          incoming().diff(existing()).affectedKeys().hasOnly(['dateMillis', 'dateLabel', 'medicineName', 'dose', 'cost', 'notes', 'trashed', 'trashedAtMillis', 'updatedAt']);
+          incoming().diff(existing()).affectedKeys().hasOnly(['dateMillis', 'dateLabel', 'medicineName', 'dose', 'cost', 'nextSprayMillis', 'nextSprayLabel', 'notes', 'trashed', 'trashedAtMillis', 'updatedAt']);
         allow delete: if isValidId(itemId) && isOwner(userId);
       }
 

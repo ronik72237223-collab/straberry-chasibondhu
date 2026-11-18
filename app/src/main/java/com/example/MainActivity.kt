@@ -1,20 +1,28 @@
 package com.example
 
+import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Calculate
+import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.MenuBook
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.FloatingActionButtonDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Snackbar
 import androidx.compose.material3.SnackbarHost
@@ -27,25 +35,29 @@ import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.ViewModelProvider.AndroidViewModelFactory.Companion.APPLICATION_KEY
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
 import com.example.data.local.FarmDatabase
 import com.example.data.local.SessionPrefs
 import com.example.data.repository.FirestoreFarmRepository
 import com.example.data.repository.LocalFarmRepository
 import com.example.ui.screens.AdminPanelScreen
+import com.example.ui.screens.ArticlesScreen
 import com.example.ui.screens.AuthScreen
 import com.example.ui.screens.CalculatorBottomSheet
 import com.example.ui.screens.FertilizerScreen
@@ -55,9 +67,11 @@ import com.example.ui.screens.HistoryExportScreen
 import com.example.ui.screens.HomeDashboardScreen
 import com.example.ui.screens.IrrigationSprayScreen
 import com.example.ui.screens.LaborScreen
+import com.example.ui.screens.SettingsScreen
 import com.example.ui.screens.TrashBinScreen
 import com.example.ui.theme.BgOffWhite
-import com.example.ui.theme.StrawberryRed
+import com.example.ui.theme.EmeraldHeaderGreen
+import com.example.ui.theme.EmeraldPillBg
 import com.example.ui.theme.StrawberryTheme
 import com.example.ui.theme.SurfacePureWhite
 import com.example.ui.theme.TextDarkBlack
@@ -69,13 +83,23 @@ import com.google.firebase.firestore.firestore
 
 object AppRoutes {
     const val HOME = "home"
-    const val FERTILIZER = "fertilizer"
-    const val IRRIGATION_SPRAY = "irrigation_spray"
-    const val LABOR = "labor"
-    const val HARVEST = "harvest"
+    const val FERTILIZER_PATTERN = "fertilizer?tab={tab}"
+    const val IRRIGATION_SPRAY_PATTERN = "irrigation_spray?tab={tab}"
+    const val LABOR_PATTERN = "labor?workType={workType}"
+    const val HARVEST_PATTERN = "harvest?tab={tab}"
     const val HISTORY = "history"
+    const val ARTICLES = "articles"
+    const val SETTINGS = "settings"
     const val TRASH = "trash"
     const val ADMIN = "admin"
+
+    fun fertilizer(tab: Int = 0) = "fertilizer?tab=$tab"
+    fun irrigationSpray(tab: Int = 0) = "irrigation_spray?tab=$tab"
+    fun labor(workType: String? = null): String {
+        val encoded = if (workType.isNullOrBlank()) "" else Uri.encode(workType)
+        return "labor?workType=$encoded"
+    }
+    fun harvest(tab: Int = 0) = "harvest?tab=$tab"
 }
 
 class MainActivity : ComponentActivity() {
@@ -170,6 +194,18 @@ private fun AuthenticatedAppShell(
 
     var showCalculator by remember { mutableStateOf(false) }
     val navController = rememberNavController()
+    val backStackEntry by navController.currentBackStackEntryAsState()
+    val currentRoute = backStackEntry?.destination?.route ?: AppRoutes.HOME
+
+    val isHomeSelected = currentRoute == AppRoutes.HOME
+    val isLedgerSelected = currentRoute.startsWith("fertilizer") ||
+        currentRoute.startsWith("irrigation_spray") ||
+        currentRoute.startsWith("labor") ||
+        currentRoute.startsWith("harvest")
+    val isHistorySelected = currentRoute == AppRoutes.HISTORY || currentRoute == AppRoutes.TRASH
+    val isSettingsSelected = currentRoute == AppRoutes.SETTINGS ||
+        currentRoute == AppRoutes.ADMIN ||
+        currentRoute == AppRoutes.ARTICLES
 
     Scaffold(
         containerColor = BgOffWhite,
@@ -184,23 +220,107 @@ private fun AuthenticatedAppShell(
             }
         },
         floatingActionButton = {
-            FloatingActionButton(
-                onClick = { showCalculator = true },
-                containerColor = StrawberryRed,
-                contentColor = Color.White,
-                shape = RoundedCornerShape(18.dp),
-                modifier = Modifier
-                    .navigationBarsPadding()
-                    .testTag("global_calculator_fab")
-            ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 16.dp),
-                    verticalAlignment = Alignment.CenterVertically
+            if (isHomeSelected) {
+                FloatingActionButton(
+                    onClick = { showCalculator = true },
+                    containerColor = EmeraldHeaderGreen,
+                    contentColor = Color.White,
+                    shape = CircleShape,
+                    elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 6.dp),
+                    modifier = Modifier
+                        .size(62.dp)
+                        .testTag("global_calculator_fab")
                 ) {
-                    Icon(Icons.Default.Calculate, contentDescription = "ক্যালকুলেটর")
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text("ক্যালকুলেটর", fontWeight = FontWeight.Bold)
+                    Icon(
+                        imageVector = Icons.Default.Calculate,
+                        contentDescription = "ক্যালকুলেটর",
+                        modifier = Modifier.size(30.dp)
+                    )
                 }
+            }
+        },
+        bottomBar = {
+            NavigationBar(
+                containerColor = SurfacePureWhite,
+                tonalElevation = 8.dp,
+                modifier = Modifier.navigationBarsPadding()
+            ) {
+                val navItemColors = NavigationBarItemDefaults.colors(
+                    selectedIconColor = EmeraldHeaderGreen,
+                    selectedTextColor = EmeraldHeaderGreen,
+                    indicatorColor = EmeraldPillBg,
+                    unselectedIconColor = TextDarkBlack,
+                    unselectedTextColor = TextDarkBlack
+                )
+
+                NavigationBarItem(
+                    selected = isHomeSelected && !showCalculator,
+                    onClick = {
+                        showCalculator = false
+                        navController.navigate(AppRoutes.HOME) {
+                            popUpTo(AppRoutes.HOME) { inclusive = true }
+                            launchSingleTop = true
+                        }
+                    },
+                    icon = { Icon(Icons.Default.Home, contentDescription = "হোম") },
+                    label = { Text("হোম", fontSize = 11.sp, fontWeight = FontWeight.Bold) },
+                    colors = navItemColors,
+                    modifier = Modifier.testTag("bottom_nav_home")
+                )
+
+                NavigationBarItem(
+                    selected = isLedgerSelected && !showCalculator,
+                    onClick = {
+                        showCalculator = false
+                        navController.navigate(AppRoutes.fertilizer(1)) {
+                            popUpTo(AppRoutes.HOME)
+                            launchSingleTop = true
+                        }
+                    },
+                    icon = { Icon(Icons.Default.MenuBook, contentDescription = "খাতা") },
+                    label = { Text("খাতা", fontSize = 11.sp, fontWeight = FontWeight.Bold) },
+                    colors = navItemColors,
+                    modifier = Modifier.testTag("bottom_nav_ledger")
+                )
+
+                NavigationBarItem(
+                    selected = showCalculator,
+                    onClick = { showCalculator = true },
+                    icon = { Icon(Icons.Default.Calculate, contentDescription = "ক্যালকুলেটর") },
+                    label = { Text("ক্যালকুলেটর", fontSize = 11.sp, fontWeight = FontWeight.Bold) },
+                    colors = navItemColors,
+                    modifier = Modifier.testTag("bottom_nav_calculator")
+                )
+
+                NavigationBarItem(
+                    selected = isHistorySelected && !showCalculator,
+                    onClick = {
+                        showCalculator = false
+                        navController.navigate(AppRoutes.HISTORY) {
+                            popUpTo(AppRoutes.HOME)
+                            launchSingleTop = true
+                        }
+                    },
+                    icon = { Icon(Icons.Default.History, contentDescription = "ইতিহাস") },
+                    label = { Text("ইতিহাস", fontSize = 11.sp, fontWeight = FontWeight.Bold) },
+                    colors = navItemColors,
+                    modifier = Modifier.testTag("bottom_nav_history")
+                )
+
+                NavigationBarItem(
+                    selected = isSettingsSelected && !showCalculator,
+                    onClick = {
+                        showCalculator = false
+                        navController.navigate(AppRoutes.SETTINGS) {
+                            popUpTo(AppRoutes.HOME)
+                            launchSingleTop = true
+                        }
+                    },
+                    icon = { Icon(Icons.Default.Settings, contentDescription = "সেটিংস") },
+                    label = { Text("সেটিংস", fontSize = 11.sp, fontWeight = FontWeight.Bold) },
+                    colors = navItemColors,
+                    modifier = Modifier.testTag("bottom_nav_settings")
+                )
             }
         }
     ) { outerPadding ->
@@ -209,7 +329,7 @@ private fun AuthenticatedAppShell(
             startDestination = AppRoutes.HOME,
             modifier = Modifier
                 .fillMaxSize()
-                .padding(bottom = outerPadding.calculateBottomPadding().coerceAtMost(0.dp))
+                .padding(bottom = outerPadding.calculateBottomPadding())
         ) {
             composable(AppRoutes.HOME) {
                 HomeDashboardScreen(
@@ -219,38 +339,51 @@ private fun AuthenticatedAppShell(
                     canRedo = canRedo,
                     onUndo = farmViewModel::undo,
                     onRedo = farmViewModel::redo,
-                    onNavigateFertilizer = { navController.navigate(AppRoutes.FERTILIZER) },
-                    onNavigateIrrigationSpray = { navController.navigate(AppRoutes.IRRIGATION_SPRAY) },
-                    onNavigateLabor = { navController.navigate(AppRoutes.LABOR) },
-                    onNavigateHarvest = { navController.navigate(AppRoutes.HARVEST) },
+                    onNavigateFertilizer = { tab -> navController.navigate(AppRoutes.fertilizer(tab)) },
+                    onNavigateIrrigationSpray = { tab -> navController.navigate(AppRoutes.irrigationSpray(tab)) },
+                    onNavigateLabor = { workFilter -> navController.navigate(AppRoutes.labor(workFilter)) },
+                    onNavigateHarvest = { tab -> navController.navigate(AppRoutes.harvest(tab)) },
+                    onOpenCalculator = { showCalculator = true },
                     onNavigateHistory = { navController.navigate(AppRoutes.HISTORY) },
-                    onNavigateTrash = { navController.navigate(AppRoutes.TRASH) },
+                    onNavigateArticles = { navController.navigate(AppRoutes.ARTICLES) },
                     onNavigateAdmin = {
                         if (session.isSuperAdmin) {
                             navController.navigate(AppRoutes.ADMIN)
                         }
-                    },
-                    onSignOut = onSignOut
+                    }
                 )
             }
-            composable(AppRoutes.FERTILIZER) {
+            composable(
+                route = AppRoutes.FERTILIZER_PATTERN,
+                arguments = listOf(navArgument("tab") { type = NavType.IntType; defaultValue = 0 })
+            ) { entry ->
+                val initialTab = entry.arguments?.getInt("tab") ?: 0
                 FertilizerScreen(
                     state = state,
+                    initialTab = initialTab,
                     copiedCalculatorAmount = copiedCalcAmount,
                     canUndo = canUndo,
                     canRedo = canRedo,
                     onUndo = farmViewModel::undo,
                     onRedo = farmViewModel::redo,
                     onBack = { navController.popBackStack() },
+                    onOpenArticles = { navController.navigate(AppRoutes.ARTICLES) },
+                    onSaveFeedingPlan = farmViewModel::saveCustomFeedingPlan,
+                    onTrashFeedingPlan = farmViewModel::trashCustomFeedingPlan,
                     onSavePurchase = farmViewModel::saveFertilizer,
                     onTrashPurchase = farmViewModel::trashFertilizer,
                     onPayDue = farmViewModel::payFertilizerDue,
                     onClearCopiedAmount = farmViewModel::clearCopiedCalculatorAmount
                 )
             }
-            composable(AppRoutes.IRRIGATION_SPRAY) {
+            composable(
+                route = AppRoutes.IRRIGATION_SPRAY_PATTERN,
+                arguments = listOf(navArgument("tab") { type = NavType.IntType; defaultValue = 0 })
+            ) { entry ->
+                val initialTab = entry.arguments?.getInt("tab") ?: 0
                 IrrigationSprayScreen(
                     state = state,
+                    initialTab = initialTab,
                     copiedCalculatorAmount = copiedCalcAmount,
                     canUndo = canUndo,
                     canRedo = canRedo,
@@ -264,9 +397,21 @@ private fun AuthenticatedAppShell(
                     onClearCopiedAmount = farmViewModel::clearCopiedCalculatorAmount
                 )
             }
-            composable(AppRoutes.LABOR) {
+            composable(
+                route = AppRoutes.LABOR_PATTERN,
+                arguments = listOf(
+                    navArgument("workType") {
+                        type = NavType.StringType
+                        nullable = true
+                        defaultValue = null
+                    }
+                )
+            ) { entry ->
+                val rawWorkType = entry.arguments?.getString("workType")
+                val initialFilter = rawWorkType?.takeIf { it.isNotBlank() }?.let { Uri.decode(it) }
                 LaborScreen(
                     state = state,
+                    initialWorkFilter = initialFilter,
                     copiedCalculatorAmount = copiedCalcAmount,
                     canUndo = canUndo,
                     canRedo = canRedo,
@@ -278,9 +423,14 @@ private fun AuthenticatedAppShell(
                     onClearCopiedAmount = farmViewModel::clearCopiedCalculatorAmount
                 )
             }
-            composable(AppRoutes.HARVEST) {
+            composable(
+                route = AppRoutes.HARVEST_PATTERN,
+                arguments = listOf(navArgument("tab") { type = NavType.IntType; defaultValue = 0 })
+            ) { entry ->
+                val initialTab = entry.arguments?.getInt("tab") ?: 0
                 HarvestProfitScreen(
                     state = state,
+                    initialTab = initialTab,
                     copiedCalculatorAmount = copiedCalcAmount,
                     canUndo = canUndo,
                     canRedo = canRedo,
@@ -302,6 +452,36 @@ private fun AuthenticatedAppShell(
                     onRedo = farmViewModel::redo,
                     onBack = { navController.popBackStack() },
                     onNotify = farmViewModel::notifyMessage
+                )
+            }
+            composable(AppRoutes.ARTICLES) {
+                ArticlesScreen(
+                    state = state,
+                    canUndo = canUndo,
+                    canRedo = canRedo,
+                    onUndo = farmViewModel::undo,
+                    onRedo = farmViewModel::redo,
+                    onBack = { navController.popBackStack() }
+                )
+            }
+            composable(AppRoutes.SETTINGS) {
+                SettingsScreen(
+                    session = session,
+                    state = state,
+                    canUndo = canUndo,
+                    canRedo = canRedo,
+                    onUndo = farmViewModel::undo,
+                    onRedo = farmViewModel::redo,
+                    onOpenArticles = { navController.navigate(AppRoutes.ARTICLES) },
+                    onOpenTrash = { navController.navigate(AppRoutes.TRASH) },
+                    onOpenHistory = { navController.navigate(AppRoutes.HISTORY) },
+                    onOpenAdmin = {
+                        if (session.isSuperAdmin) {
+                            navController.navigate(AppRoutes.ADMIN)
+                        }
+                    },
+                    onNotify = farmViewModel::notifyMessage,
+                    onSignOut = onSignOut
                 )
             }
             composable(AppRoutes.TRASH) {
@@ -331,8 +511,11 @@ private fun AuthenticatedAppShell(
                     onSaveConfig = farmViewModel::saveAppConfig,
                     onSaveRecipe = farmViewModel::saveFeedingRecipe,
                     onDeleteRecipe = farmViewModel::deleteFeedingRecipe,
-                    onLoadUsers = farmViewModel::loadRegisteredUsers,
-                    onSeedRecipes = farmViewModel::seedDefaultRecipes
+                    onSeedRecipes = farmViewModel::seedDefaultRecipes,
+                    onSaveArticle = farmViewModel::saveArticle,
+                    onDeleteArticle = farmViewModel::deleteArticle,
+                    onSeedArticles = farmViewModel::seedDefaultArticles,
+                    onLoadUsers = farmViewModel::loadRegisteredUsers
                 )
             }
         }

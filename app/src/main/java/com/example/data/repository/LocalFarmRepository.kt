@@ -3,7 +3,10 @@ package com.example.data.repository
 import com.example.data.local.FarmDao
 import com.example.data.local.toLocalEntity
 import com.example.model.AppConfig
+import com.example.model.CustomFeedingPlan
+import com.example.model.DefaultFarmArticles
 import com.example.model.DefaultFeedingRecipes
+import com.example.model.FarmArticle
 import com.example.model.FeedingRecipe
 import com.example.model.FertilizerPurchase
 import com.example.model.GUEST_USER_ID
@@ -62,6 +65,24 @@ class LocalFarmRepository(
             }
     }
 
+    override fun observeArticles(): Flow<List<FarmArticle>> {
+        val db = firestore ?: return kotlinx.coroutines.flow.flowOf(DefaultFarmArticles.items)
+        return db.collection("articles")
+            .snapshots()
+            .map { snap ->
+                val list = snap.toObjects(FarmArticle::class.java, DocumentSnapshot.ServerTimestampBehavior.ESTIMATE)
+                if (list.isEmpty()) DefaultFarmArticles.items else list.sortedBy { it.orderIndex }
+            }
+            .catch { error ->
+                val fsErr = generateSequence(error) { it.cause }.filterIsInstance<FirebaseFirestoreException>().firstOrNull()
+                if (fsErr == null && error is CancellationException) throw error
+                emit(DefaultFarmArticles.items)
+            }
+    }
+
+    override fun observeCustomFeedingPlans(): Flow<List<CustomFeedingPlan>> =
+        dao.observeCustomFeedingPlans().map { list -> list.map { it.toModel() } }
+
     override fun observeFertilizers(): Flow<List<FertilizerPurchase>> =
         dao.observeFertilizers().map { list -> list.map { it.toModel() } }
 
@@ -76,6 +97,26 @@ class LocalFarmRepository(
 
     override fun observeHarvests(): Flow<List<HarvestSale>> =
         dao.observeHarvests().map { list -> list.map { it.toModel() } }
+
+    override suspend fun addCustomFeedingPlan(item: CustomFeedingPlan): Result<CustomFeedingPlan> = runCatching {
+        val id = item.id.ifBlank { UUID.randomUUID().toString() }
+        val saved = item.copy(id = id, userId = GUEST_USER_ID)
+        dao.upsertCustomFeedingPlan(saved.toLocalEntity())
+        saved
+    }
+
+    override suspend fun updateCustomFeedingPlan(item: CustomFeedingPlan): Result<Unit> = runCatching {
+        dao.upsertCustomFeedingPlan(item.copy(userId = GUEST_USER_ID).toLocalEntity())
+    }
+
+    override suspend fun setCustomFeedingPlanTrashed(id: String, trashed: Boolean, trashedAtMillis: Long): Result<Unit> = runCatching {
+        val existing = dao.observeCustomFeedingPlans().first().firstOrNull { it.id == id } ?: return@runCatching
+        dao.upsertCustomFeedingPlan(existing.copy(trashed = trashed, trashedAtMillis = if (trashed) trashedAtMillis else 0L))
+    }
+
+    override suspend fun deleteCustomFeedingPlanPermanently(id: String): Result<Unit> = runCatching {
+        dao.deleteCustomFeedingPlan(id)
+    }
 
     override suspend fun addFertilizer(item: FertilizerPurchase): Result<FertilizerPurchase> = runCatching {
         val id = item.id.ifBlank { UUID.randomUUID().toString() }
@@ -183,6 +224,7 @@ class LocalFarmRepository(
     }
 
     override suspend fun emptyTrash(): Result<Unit> = runCatching {
+        dao.emptyTrashedCustomFeedingPlans()
         dao.emptyTrashedFertilizers()
         dao.emptyTrashedIrrigations()
         dao.emptyTrashedSprays()
@@ -200,6 +242,14 @@ class LocalFarmRepository(
         Result.failure(IllegalStateException("রেসিপি মুছতে সুপার অ্যাডমিন লগইন প্রয়োজন।"))
 
     override suspend fun seedDefaultRecipesIfEmpty(): Result<Unit> = Result.success(Unit)
+
+    override suspend fun saveArticle(article: FarmArticle): Result<FarmArticle> =
+        Result.failure(IllegalStateException("আর্টিকেল প্রকাশের জন্য সুপার অ্যাডমিন লগইন প্রয়োজন।"))
+
+    override suspend fun deleteArticle(articleId: String): Result<Unit> =
+        Result.failure(IllegalStateException("আর্টিকেল মুছতে সুপার অ্যাডমিন লগইন প্রয়োজন।"))
+
+    override suspend fun seedDefaultArticlesIfEmpty(): Result<Unit> = Result.success(Unit)
 
     override suspend fun fetchRegisteredUsers(): Result<List<UserProfile>> = Result.success(emptyList())
 }

@@ -402,6 +402,119 @@ fun DateSelectorRow(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun NextDateSelectorRow(
+    title: String,
+    baseDateMillis: Long,
+    nextDateMillis: Long,
+    quickDayOffsets: List<Int>,
+    allowClear: Boolean = false,
+    onNextDateSelected: (Long) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var showPicker by remember { mutableStateOf(false) }
+    val nextLabel = if (nextDateMillis > 0L) BengaliFormatters.formatDateLabel(nextDateMillis) else "নির্বাচন করা হয়নি"
+
+    Column(modifier = modifier.fillMaxWidth()) {
+        Text(
+            text = "$title: $nextLabel",
+            style = MaterialTheme.typography.titleSmall.copy(
+                color = TextDarkBlack,
+                fontWeight = FontWeight.Bold
+            )
+        )
+        Spacer(modifier = Modifier.height(6.dp))
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            quickDayOffsets.forEach { days ->
+                val targetMillis = BengaliFormatters.addDays(baseDateMillis, days)
+                val isSelected = nextDateMillis > 0L &&
+                    BengaliFormatters.formatDateLabel(nextDateMillis) == BengaliFormatters.formatDateLabel(targetMillis)
+                FilterChip(
+                    selected = isSelected,
+                    onClick = { onNextDateSelected(targetMillis) },
+                    label = {
+                        Text(
+                            text = "+${BengaliFormatters.toBengaliDigits(days.toString())} দিন",
+                            color = TextDarkBlack,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    },
+                    colors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = AmberSoftBg,
+                        containerColor = SurfacePureWhite
+                    ),
+                    border = FilterChipDefaults.filterChipBorder(
+                        enabled = true,
+                        selected = isSelected,
+                        borderColor = BorderSlate,
+                        selectedBorderColor = AmberBorder
+                    ),
+                    modifier = Modifier.heightIn(min = 42.dp)
+                )
+            }
+            OutlinedButton(
+                onClick = { showPicker = true },
+                shape = RoundedCornerShape(10.dp),
+                border = BorderStroke(1.dp, BorderSlate),
+                colors = ButtonDefaults.outlinedButtonColors(
+                    containerColor = SurfacePureWhite,
+                    contentColor = TextDarkBlack
+                ),
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+                modifier = Modifier.heightIn(min = 42.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.CalendarMonth,
+                    contentDescription = "পরবর্তী তারিখ নির্বাচন",
+                    tint = TextDarkBlack,
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text("তারিখ বাছাই", color = TextDarkBlack, fontWeight = FontWeight.SemiBold)
+            }
+            if (allowClear && nextDateMillis > 0L) {
+                TextButton(
+                    onClick = { onNextDateSelected(0L) },
+                    modifier = Modifier.heightIn(min = 42.dp)
+                ) {
+                    Text("বাদ দিন", color = StrawberryRed, fontWeight = FontWeight.SemiBold)
+                }
+            }
+        }
+    }
+
+    if (showPicker) {
+        val initial = if (nextDateMillis > 0L) nextDateMillis else BengaliFormatters.addDays(baseDateMillis, quickDayOffsets.firstOrNull() ?: 4)
+        val pickerState = rememberDatePickerState(initialSelectedDateMillis = initial)
+        DatePickerDialog(
+            onDismissRequest = { showPicker = false },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        pickerState.selectedDateMillis?.let { onNextDateSelected(it) }
+                        showPicker = false
+                    }
+                ) {
+                    Text("ঠিক আছে", color = EmeraldPrimary, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showPicker = false }) {
+                    Text("বাতিল", color = TextDarkBlack)
+                }
+            }
+        ) {
+            DatePicker(state = pickerState)
+        }
+    }
+}
+
 @Composable
 fun InlineEditDeleteRow(
     onEdit: () -> Unit,

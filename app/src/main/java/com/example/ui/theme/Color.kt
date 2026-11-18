@@ -13,16 +13,31 @@ val TextDarkBlack = Color(0xFF111827)
 val TextSecondaryDark = Color(0xFF374151)
 val TextMuted = Color(0xFF4B5563)
 
-// Brand Accents
+// Brand Accents (Matching Reference Dashboard)
 val EmeraldPrimary = Color(0xFF059669)
+val EmeraldHeaderGreen = Color(0xFF048C38)
 val EmeraldDark = Color(0xFF047857)
 val EmeraldSoftBg = Color(0xFFECFDF5)
+val EmeraldPillBg = Color(0xFFE7F7D8)
 val EmeraldBorder = Color(0xFFA7F3D0)
 
 val StrawberryRed = Color(0xFFD90429)
+val StrawberryHeaderRed = Color(0xFFE10613)
 val StrawberryDark = Color(0xFFB91C1C)
 val StrawberrySoftBg = Color(0xFFFFF1F2)
+val StrawberryPillBg = Color(0xFFFCE4E4)
 val StrawberryBorder = Color(0xFFFECDD3)
+
+val CalculatorBlue = Color(0xFF0A4EB8)
+val CalculatorPillBg = Color(0xFFE2EEFF)
+val CalculatorBorder = Color(0xFFBFDBFE)
+
+val HistoryPurple = Color(0xFF6B21A8)
+val HistoryPillBg = Color(0xFFF3E8FF)
+
+val HealthyCardGreenBg = Color(0xFFE9FBD6)
+val NoticeBannerBg = Color(0xFFECF9DC)
+val NoticeBannerBorder = Color(0xFFC5E89B)
 
 // Bento Accent Colors
 val AmberAccent = Color(0xFFD97706)

@@ -48,6 +48,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -80,6 +81,7 @@ import com.example.util.BengaliFormatters
 @Composable
 fun IrrigationSprayScreen(
     state: FarmDashboardState,
+    initialTab: Int = 0,
     copiedCalculatorAmount: String?,
     canUndo: Boolean,
     canRedo: Boolean,
@@ -92,7 +94,7 @@ fun IrrigationSprayScreen(
     onTrashSpray: (SprayLog) -> Unit,
     onClearCopiedAmount: () -> Unit
 ) {
-    var selectedTab by remember { mutableIntStateOf(0) }
+    var selectedTab by rememberSaveable(initialTab) { mutableIntStateOf(initialTab.coerceIn(0, 1)) }
     var showIrrigationDialog by remember { mutableStateOf(false) }
     var editingIrrigation by remember { mutableStateOf<IrrigationLog?>(null) }
     var showSprayDialog by remember { mutableStateOf(false) }
@@ -229,7 +231,7 @@ fun IrrigationSprayScreen(
                             EmptyStateCard(
                                 icon = Icons.Default.WaterDrop,
                                 title = "কোনো সেচের তথ্য নেই",
-                                subtitle = "জমিতে পানি দেওয়ার তারিখ ও খরচ লিখলে পরবর্তী সেচের সম্ভাব্য তারিখ স্বয়ংক্রিয়ভাবে দেখাবে।",
+                                subtitle = "জমিতে পানি দেওয়ার তারিখ ও পরবর্তী সম্ভাব্য সেচের তারিখ নিজেই সেট করে রাখুন।",
                                 actionLabel = "সেচ যোগ করুন",
                                 onAction = {
                                     editingIrrigation = null
@@ -313,14 +315,41 @@ fun IrrigationSprayScreen(
                             colors = CardDefaults.cardColors(containerColor = TealSoftBg),
                             border = BorderStroke(1.5.dp, TealBorder)
                         ) {
-                            Column(modifier = Modifier.padding(16.dp)) {
-                                Text("মোট স্প্রে ও ওষুধ খরচ", color = TextSecondaryDark, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-                                Text(
-                                    text = BengaliFormatters.formatTaka(state.summary.sprayTotal),
-                                    color = TextDarkBlack,
-                                    fontSize = 24.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(16.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column {
+                                    Text("মোট স্প্রে ও ওষুধ খরচ", color = TextSecondaryDark, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                                    Text(
+                                        text = BengaliFormatters.formatTaka(state.summary.sprayTotal),
+                                        color = TextDarkBlack,
+                                        fontSize = 24.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                                if (state.summary.nextSprayLabel.isNotBlank()) {
+                                    Surface(
+                                        shape = RoundedCornerShape(12.dp),
+                                        color = AmberSoftBg,
+                                        border = BorderStroke(1.dp, AmberBorder)
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Icon(Icons.Default.NotificationsActive, contentDescription = "পরবর্তী স্প্রে", tint = TextDarkBlack, modifier = Modifier.size(18.dp))
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Column {
+                                                Text("পরবর্তী সম্ভাব্য স্প্রে", fontSize = 11.sp, color = TextSecondaryDark)
+                                                Text(state.summary.nextSprayLabel, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = TextDarkBlack)
+                                            }
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
@@ -330,7 +359,7 @@ fun IrrigationSprayScreen(
                             EmptyStateCard(
                                 icon = Icons.Default.Science,
                                 title = "কোনো স্প্রে রেকর্ড নেই",
-                                subtitle = "গাছে কীটনাশক, ছত্রাকনাশক বা হরলিক্স স্প্রে করলে এখানে লিখে রাখুন।",
+                                subtitle = "গাছে কীটনাশক, ছত্রাকনাশক বা হরলিক্স স্প্রে করলে আজকের ও পরবর্তী তারিখসহ লিখে রাখুন।",
                                 actionLabel = "স্প্রে যোগ করুন",
                                 onAction = {
                                     editingSpray = null
@@ -358,7 +387,7 @@ fun IrrigationSprayScreen(
                                                 style = MaterialTheme.typography.titleMedium.copy(color = TextDarkBlack, fontWeight = FontWeight.Bold)
                                             )
                                             Text(
-                                                text = "${item.dateLabel}${if (item.dose.isNotBlank()) " • মাত্রা: ${item.dose}" else ""}",
+                                                text = "স্প্রে তারিখ: ${item.dateLabel}${if (item.dose.isNotBlank()) " • মাত্রা: ${item.dose}" else ""}",
                                                 style = MaterialTheme.typography.bodyMedium.copy(color = TextSecondaryDark)
                                             )
                                         }
@@ -366,6 +395,26 @@ fun IrrigationSprayScreen(
                                             text = BengaliFormatters.formatTaka(item.cost),
                                             style = MaterialTheme.typography.titleLarge.copy(color = TextDarkBlack, fontWeight = FontWeight.Bold)
                                         )
+                                    }
+                                    if (item.nextSprayLabel.isNotBlank()) {
+                                        Spacer(modifier = Modifier.height(8.dp))
+                                        Surface(
+                                            shape = RoundedCornerShape(10.dp),
+                                            color = AmberSoftBg,
+                                            border = BorderStroke(1.dp, AmberBorder)
+                                        ) {
+                                            Row(
+                                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Icon(Icons.Default.NotificationsActive, contentDescription = "পরবর্তী স্প্রে", tint = TextDarkBlack, modifier = Modifier.size(16.dp))
+                                                Spacer(modifier = Modifier.width(6.dp))
+                                                Text(
+                                                    text = "পরবর্তী স্প্রের সম্ভাব্য তারিখ: ${item.nextSprayLabel}",
+                                                    style = MaterialTheme.typography.labelMedium.copy(color = TextDarkBlack, fontWeight = FontWeight.Bold)
+                                                )
+                                            }
+                                        }
                                     }
                                     if (item.notes.isNotBlank()) {
                                         Spacer(modifier = Modifier.height(6.dp))
@@ -426,15 +475,16 @@ private fun IrrigationFormDialog(
     onSave: (IrrigationLog) -> Unit
 ) {
     var dateMillis by remember { mutableLongStateOf(initial?.dateMillis ?: BengaliFormatters.startOfTodayMillis()) }
+    var nextIrrigationMillis by remember {
+        mutableLongStateOf(
+            initial?.nextIrrigationMillis?.takeIf { it > 0L }
+                ?: BengaliFormatters.addDays(dateMillis, defaultIntervalDays)
+        )
+    }
     var plotName by remember { mutableStateOf(initial?.plotName ?: "১ নং স্ট্রবেরি জমি") }
     var costText by remember { mutableStateOf(initial?.cost?.let { BengaliFormatters.formatNumber(it, false) } ?: "0") }
-    var intervalDaysText by remember { mutableStateOf(defaultIntervalDays.toString()) }
     var notes by remember { mutableStateOf(initial?.notes.orEmpty()) }
     var errorText by remember { mutableStateOf<String?>(null) }
-
-    val interval = (BengaliFormatters.parseFlexibleLong(intervalDaysText)?.toInt() ?: defaultIntervalDays).coerceIn(1, 60)
-    val nextMillis = BengaliFormatters.addDays(dateMillis, interval)
-    val nextLabel = BengaliFormatters.formatDateLabel(nextMillis)
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -452,7 +502,19 @@ private fun IrrigationFormDialog(
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                DateSelectorRow(selectedMillis = dateMillis, onDateSelected = { dateMillis = it })
+                DateSelectorRow(
+                    selectedMillis = dateMillis,
+                    onDateSelected = { picked ->
+                        dateMillis = picked
+                    }
+                )
+                NextDateSelectorRow(
+                    title = "পরবর্তী সম্ভাব্য সেচের তারিখ",
+                    baseDateMillis = dateMillis,
+                    nextDateMillis = nextIrrigationMillis,
+                    quickDayOffsets = listOf(3, 4, 5, 7),
+                    onNextDateSelected = { nextIrrigationMillis = it }
+                )
                 HighContrastTextField(
                     value = plotName,
                     onValueChange = { plotName = it; errorText = null },
@@ -475,24 +537,6 @@ private fun IrrigationFormDialog(
                     testTag = "irr_cost_input"
                 )
                 HighContrastTextField(
-                    value = intervalDaysText,
-                    onValueChange = { intervalDaysText = it },
-                    label = "কত দিন পর আবার সেচ দেবেন?",
-                    keyboardType = KeyboardType.Number
-                )
-                Surface(
-                    shape = RoundedCornerShape(12.dp),
-                    color = AmberSoftBg,
-                    border = BorderStroke(1.dp, AmberBorder),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text(
-                        text = "পরবর্তী সেচের সম্ভাব্য তারিখ: $nextLabel",
-                        style = MaterialTheme.typography.bodyMedium.copy(color = TextDarkBlack, fontWeight = FontWeight.Bold),
-                        modifier = Modifier.padding(10.dp)
-                    )
-                }
-                HighContrastTextField(
                     value = notes,
                     onValueChange = { notes = it },
                     label = "নোট (ঐচ্ছিক)",
@@ -512,14 +556,15 @@ private fun IrrigationFormDialog(
                         return@Button
                     }
                     val cost = BengaliFormatters.parseFlexibleDouble(costText) ?: 0.0
+                    val safeNextMillis = if (nextIrrigationMillis > 0L) nextIrrigationMillis else BengaliFormatters.addDays(dateMillis, defaultIntervalDays)
                     onSave(
                         IrrigationLog(
                             dateMillis = dateMillis,
                             dateLabel = BengaliFormatters.formatDateLabel(dateMillis),
                             plotName = plotName.trim(),
                             cost = cost.coerceAtLeast(0.0),
-                            nextIrrigationMillis = nextMillis,
-                            nextIrrigationLabel = nextLabel,
+                            nextIrrigationMillis = safeNextMillis,
+                            nextIrrigationLabel = BengaliFormatters.formatDateLabel(safeNextMillis),
                             notes = notes.trim()
                         )
                     )
@@ -548,6 +593,12 @@ private fun SprayFormDialog(
     onSave: (SprayLog) -> Unit
 ) {
     var dateMillis by remember { mutableLongStateOf(initial?.dateMillis ?: BengaliFormatters.startOfTodayMillis()) }
+    var nextSprayMillis by remember {
+        mutableLongStateOf(
+            initial?.nextSprayMillis?.takeIf { it > 0L }
+                ?: BengaliFormatters.addDays(dateMillis, 7)
+        )
+    }
     var medicine by remember { mutableStateOf(initial?.medicineName.orEmpty()) }
     var dose by remember { mutableStateOf(initial?.dose.orEmpty()) }
     var costText by remember { mutableStateOf(initial?.cost?.let { BengaliFormatters.formatNumber(it, false) }.orEmpty()) }
@@ -571,6 +622,14 @@ private fun SprayFormDialog(
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 DateSelectorRow(selectedMillis = dateMillis, onDateSelected = { dateMillis = it })
+                NextDateSelectorRow(
+                    title = "পরবর্তী সম্ভাব্য স্প্রের তারিখ",
+                    baseDateMillis = dateMillis,
+                    nextDateMillis = nextSprayMillis,
+                    quickDayOffsets = listOf(5, 7, 10, 14),
+                    allowClear = true,
+                    onNextDateSelected = { nextSprayMillis = it }
+                )
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -647,6 +706,8 @@ private fun SprayFormDialog(
                             medicineName = medicine.trim(),
                             dose = dose.trim(),
                             cost = cost.coerceAtLeast(0.0),
+                            nextSprayMillis = nextSprayMillis,
+                            nextSprayLabel = if (nextSprayMillis > 0L) BengaliFormatters.formatDateLabel(nextSprayMillis) else "",
                             notes = notes.trim()
                         )
                     )

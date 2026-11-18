@@ -1,6 +1,7 @@
 package com.example.ui.screens
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -31,13 +32,15 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.ScrollableTabRow
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRow
 import androidx.compose.material3.TabRowDefaults
 import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.material3.Text
@@ -55,17 +58,21 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.model.AppConfig
+import com.example.model.DefaultFarmArticles
+import com.example.model.FarmArticle
 import com.example.model.FeedingRecipe
 import com.example.model.UserProfile
 import com.example.ui.theme.BgOffWhite
+import com.example.ui.theme.BorderSlate
 import com.example.ui.theme.BorderSoft
 import com.example.ui.theme.EmeraldBorder
+import com.example.ui.theme.EmeraldHeaderGreen
 import com.example.ui.theme.EmeraldPrimary
 import com.example.ui.theme.EmeraldSoftBg
-import com.example.ui.theme.StrawberryBorder
 import com.example.ui.theme.StrawberryRed
 import com.example.ui.theme.StrawberrySoftBg
 import com.example.ui.theme.SurfacePureWhite
@@ -88,8 +95,11 @@ fun AdminPanelScreen(
     onSaveConfig: (AppConfig) -> Unit,
     onSaveRecipe: (FeedingRecipe) -> Unit,
     onDeleteRecipe: (String) -> Unit,
-    onLoadUsers: () -> Unit,
-    onSeedRecipes: () -> Unit
+    onSeedRecipes: () -> Unit,
+    onSaveArticle: (FarmArticle) -> Unit,
+    onDeleteArticle: (String) -> Unit,
+    onSeedArticles: () -> Unit,
+    onLoadUsers: () -> Unit
 ) {
     if (!isSuperAdmin) {
         Scaffold(
@@ -128,9 +138,11 @@ fun AdminPanelScreen(
     var selectedTab by remember { mutableIntStateOf(0) }
     var showRecipeDialog by remember { mutableStateOf(false) }
     var editingRecipe by remember { mutableStateOf<FeedingRecipe?>(null) }
+    var showArticleDialog by remember { mutableStateOf(false) }
+    var editingArticle by remember { mutableStateOf<FarmArticle?>(null) }
 
     LaunchedEffect(selectedTab) {
-        if (selectedTab == 2) {
+        if (selectedTab == 3) {
             onLoadUsers()
         }
     }
@@ -148,19 +160,35 @@ fun AdminPanelScreen(
             )
         },
         floatingActionButton = {
-            if (selectedTab == 1) {
-                FloatingActionButton(
+            when (selectedTab) {
+                1 -> FloatingActionButton(
                     onClick = { editingRecipe = null; showRecipeDialog = true },
                     containerColor = StrawberryRed,
                     contentColor = Color.White,
-                    modifier = Modifier
-                        .padding(bottom = 72.dp)
-                        .testTag("admin_add_recipe_fab")
+                    modifier = Modifier.testTag("admin_add_recipe_fab")
                 ) {
-                    Row(modifier = Modifier.padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
                         Icon(Icons.Default.Add, contentDescription = "নতুন রেসিপি")
                         Spacer(modifier = Modifier.width(6.dp))
                         Text("নতুন রেসিপি", fontWeight = FontWeight.Bold)
+                    }
+                }
+                2 -> FloatingActionButton(
+                    onClick = { editingArticle = null; showArticleDialog = true },
+                    containerColor = EmeraldHeaderGreen,
+                    contentColor = Color.White,
+                    modifier = Modifier.testTag("admin_add_article_fab")
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Default.Add, contentDescription = "নতুন আর্টিকেল")
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("আর্টিকেল লিখুন", fontWeight = FontWeight.Bold)
                     }
                 }
             }
@@ -171,10 +199,11 @@ fun AdminPanelScreen(
                 .fillMaxSize()
                 .padding(innerPadding)
         ) {
-            TabRow(
+            ScrollableTabRow(
                 selectedTabIndex = selectedTab,
                 containerColor = SurfacePureWhite,
                 contentColor = TextDarkBlack,
+                edgePadding = 8.dp,
                 indicator = { tabPositions ->
                     TabRowDefaults.SecondaryIndicator(
                         modifier = Modifier.tabIndicatorOffset(tabPositions[selectedTab]),
@@ -191,11 +220,16 @@ fun AdminPanelScreen(
                 Tab(
                     selected = selectedTab == 1,
                     onClick = { selectedTab = 1 },
-                    text = { Text("রেসিপি নিয়ম", fontWeight = FontWeight.Bold, color = TextDarkBlack) }
+                    text = { Text("সার রেসিপি", fontWeight = FontWeight.Bold, color = TextDarkBlack) }
                 )
                 Tab(
                     selected = selectedTab == 2,
                     onClick = { selectedTab = 2 },
+                    text = { Text("আর্টিকেল প্রকাশ", fontWeight = FontWeight.Bold, color = TextDarkBlack) }
+                )
+                Tab(
+                    selected = selectedTab == 3,
+                    onClick = { selectedTab = 3 },
                     text = { Text("চাষি তালিকা", fontWeight = FontWeight.Bold, color = TextDarkBlack) }
                 )
             }
@@ -211,7 +245,13 @@ fun AdminPanelScreen(
                     onDelete = { onDeleteRecipe(it.id) },
                     onSeedDefaults = onSeedRecipes
                 )
-                2 -> AdminUsersTab(
+                2 -> AdminArticlesTab(
+                    articles = state.articles,
+                    onEdit = { editingArticle = it; showArticleDialog = true },
+                    onDelete = { onDeleteArticle(it.id) },
+                    onSeedDefaults = onSeedArticles
+                )
+                3 -> AdminUsersTab(
                     users = users,
                     loading = loadingUsers,
                     onRefresh = onLoadUsers
@@ -228,6 +268,18 @@ fun AdminPanelScreen(
             onSave = { recipe ->
                 onSaveRecipe(recipe)
                 showRecipeDialog = false
+            }
+        )
+    }
+
+    if (showArticleDialog) {
+        AdminArticleFormDialog(
+            initial = editingArticle,
+            nextOrder = (state.articles.maxOfOrNull { it.orderIndex } ?: 0L) + 1L,
+            onDismiss = { showArticleDialog = false },
+            onSave = { article ->
+                onSaveArticle(article)
+                showArticleDialog = false
             }
         )
     }
@@ -276,7 +328,7 @@ private fun AdminSettingsTab(
                 HighContrastTextField(
                     value = dashboardSubtitle,
                     onValueChange = { dashboardSubtitle = it },
-                    label = "ড্যাশবোর্ড সাবটাইটেল"
+                    label = "ড্যাশবোর্ড সাবটাইটেল (যেমন: সুস্থ গাছে সমৃদ্ধ ফসল)"
                 )
                 HighContrastTextField(
                     value = welcomeBanner,
@@ -321,7 +373,7 @@ private fun AdminSettingsTab(
                             AppConfig(
                                 appTitle = appTitle.trim().ifBlank { "স্ট্রবেরি চাষি বন্ধু" },
                                 welcomeBanner = welcomeBanner.trim(),
-                                dashboardSubtitle = dashboardSubtitle.trim().ifBlank { "আজকের বাগানের খাতা" },
+                                dashboardSubtitle = dashboardSubtitle.trim().ifBlank { "সুস্থ গাছে সমৃদ্ধ ফসল" },
                                 irrigationIntervalDays = interval,
                                 workTypes = workTypesText.split(",").map { it.trim() }.filter { it.isNotBlank() },
                                 fertilizerPresets = fertPresetsText.split(",").map { it.trim() }.filter { it.isNotBlank() },
@@ -355,7 +407,7 @@ private fun AdminRecipesTab(
 ) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 14.dp, bottom = 140.dp),
+        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 14.dp, bottom = 120.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         item {
@@ -395,6 +447,86 @@ private fun AdminRecipesTab(
                         InlineEditDeleteRow(
                             onEdit = { onEdit(recipe) },
                             onDelete = { onDelete(recipe) }
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun AdminArticlesTab(
+    articles: List<FarmArticle>,
+    onEdit: (FarmArticle) -> Unit,
+    onDelete: (FarmArticle) -> Unit,
+    onSeedDefaults: () -> Unit
+) {
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 14.dp, bottom = 120.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        item {
+            Button(
+                onClick = onSeedDefaults,
+                colors = ButtonDefaults.buttonColors(containerColor = EmeraldSoftBg, contentColor = TextDarkBlack),
+                border = BorderStroke(1.dp, EmeraldBorder),
+                shape = RoundedCornerShape(14.dp),
+                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
+            ) {
+                Text("ডিফল্ট ৩টি কৃষি আর্টিকেল ক্লাউডে সিঙ্ক করুন", fontWeight = FontWeight.Bold, color = TextDarkBlack)
+            }
+        }
+
+        items(articles, key = { it.id }) { article ->
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(18.dp),
+                colors = CardDefaults.cardColors(containerColor = SurfacePureWhite),
+                border = BorderStroke(1.dp, EmeraldBorder)
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Surface(shape = RoundedCornerShape(8.dp), color = EmeraldSoftBg) {
+                            Text(
+                                text = article.category,
+                                color = EmeraldHeaderGreen,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 12.sp,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                            )
+                        }
+                        if (article.publishedDateLabel.isNotBlank()) {
+                            Text(
+                                text = article.publishedDateLabel,
+                                style = MaterialTheme.typography.labelSmall.copy(color = TextSecondaryDark)
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = article.title,
+                        style = MaterialTheme.typography.titleMedium.copy(color = TextDarkBlack, fontWeight = FontWeight.Bold)
+                    )
+                    if (article.summary.isNotBlank()) {
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = article.summary,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                            style = MaterialTheme.typography.bodySmall.copy(color = TextSecondaryDark)
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                        InlineEditDeleteRow(
+                            onEdit = { onEdit(article) },
+                            onDelete = { onDelete(article) }
                         )
                     }
                 }
@@ -536,6 +668,141 @@ private fun AdminRecipeFormDialog(
                 colors = ButtonDefaults.buttonColors(containerColor = EmeraldPrimary, contentColor = Color.White)
             ) {
                 Text("সংরক্ষণ করুন", fontWeight = FontWeight.Bold)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("বাতিল", color = TextDarkBlack)
+            }
+        }
+    )
+}
+
+@Composable
+private fun AdminArticleFormDialog(
+    initial: FarmArticle?,
+    nextOrder: Long,
+    onDismiss: () -> Unit,
+    onSave: (FarmArticle) -> Unit
+) {
+    var title by remember { mutableStateOf(initial?.title.orEmpty()) }
+    var category by remember { mutableStateOf(initial?.category ?: DefaultFarmArticles.categories.first()) }
+    var summary by remember { mutableStateOf(initial?.summary.orEmpty()) }
+    var body by remember { mutableStateOf(initial?.body.orEmpty()) }
+    var publishedDateLabel by remember {
+        mutableStateOf(
+            initial?.publishedDateLabel?.ifBlank {
+                BengaliFormatters.formatDateLabel(System.currentTimeMillis())
+            } ?: BengaliFormatters.formatDateLabel(System.currentTimeMillis())
+        )
+    }
+    var errorText by remember { mutableStateOf<String?>(null) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = SurfacePureWhite,
+        title = {
+            Text(
+                text = if (initial == null) "নতুন কৃষি আর্টিকেল লিখুন" else "আর্টিকেল সম্পাদনা",
+                style = MaterialTheme.typography.titleLarge.copy(color = TextDarkBlack, fontWeight = FontWeight.Bold)
+            )
+        },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Text(
+                    text = "বিভাগ বাছাই করুন:",
+                    style = MaterialTheme.typography.labelLarge.copy(color = TextDarkBlack, fontWeight = FontWeight.Bold)
+                )
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    DefaultFarmArticles.categories.forEach { preset ->
+                        FilterChip(
+                            selected = category == preset,
+                            onClick = { category = preset },
+                            label = { Text(preset, color = TextDarkBlack, fontWeight = FontWeight.SemiBold) },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = EmeraldSoftBg,
+                                containerColor = SurfacePureWhite
+                            ),
+                            border = FilterChipDefaults.filterChipBorder(
+                                enabled = true,
+                                selected = category == preset,
+                                borderColor = BorderSlate,
+                                selectedBorderColor = EmeraldPrimary
+                            )
+                        )
+                    }
+                }
+                HighContrastTextField(
+                    value = category,
+                    onValueChange = { category = it },
+                    label = "বিভাগের নাম *"
+                )
+                HighContrastTextField(
+                    value = title,
+                    onValueChange = { title = it; errorText = null },
+                    label = "আর্টিকেলের শিরোনাম *",
+                    testTag = "admin_article_title_input"
+                )
+                HighContrastTextField(
+                    value = summary,
+                    onValueChange = { summary = it },
+                    label = "সংক্ষিপ্ত সারসংক্ষেপ",
+                    singleLine = false,
+                    maxLines = 3
+                )
+                HighContrastTextField(
+                    value = body,
+                    onValueChange = { body = it; errorText = null },
+                    label = "বিস্তারিত পরামর্শ ও নিয়ম *",
+                    singleLine = false,
+                    maxLines = 8,
+                    testTag = "admin_article_body_input"
+                )
+                HighContrastTextField(
+                    value = publishedDateLabel,
+                    onValueChange = { publishedDateLabel = it },
+                    label = "প্রকাশের তারিখ / লেবেল"
+                )
+                if (!errorText.isNullOrBlank()) {
+                    Text(errorText!!, color = StrawberryRed, fontWeight = FontWeight.Bold)
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    if (title.isBlank() || body.isBlank()) {
+                        errorText = "শিরোনাম ও বিস্তারিত পরামর্শ লিখুন।"
+                        return@Button
+                    }
+                    onSave(
+                        FarmArticle(
+                            id = initial?.id.orEmpty(),
+                            title = title.trim(),
+                            category = category.trim().ifBlank { "কৃষি পরামর্শ" },
+                            summary = summary.trim(),
+                            body = body.trim(),
+                            publishedDateLabel = publishedDateLabel.trim().ifBlank {
+                                BengaliFormatters.formatDateLabel(System.currentTimeMillis())
+                            },
+                            orderIndex = initial?.orderIndex ?: nextOrder
+                        )
+                    )
+                },
+                colors = ButtonDefaults.buttonColors(containerColor = EmeraldPrimary, contentColor = Color.White),
+                modifier = Modifier.testTag("admin_article_save_button")
+            ) {
+                Text("প্রকাশ করুন", fontWeight = FontWeight.Bold)
             }
         },
         dismissButton = {

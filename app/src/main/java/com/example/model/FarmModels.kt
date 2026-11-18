@@ -13,8 +13,8 @@ const val GUEST_USER_ID = "guest_local"
 data class AppConfig(
     @DocumentId val id: String = "settings",
     val appTitle: String = "স্ট্রবেরি চাষি বন্ধু",
-    val welcomeBanner: String = "আপনার স্ট্রবেরি বাগানের সার, সেচ, স্প্রে, শ্রমিক ও বিক্রির সহজ ডিজিটাল খাতা। প্রতিদিনের হিসাব রাখুন একদম সহজে!",
-    val dashboardSubtitle: String = "আজকের বাগানের খাতা",
+    val welcomeBanner: String = "আমাদের লক্ষ্য: বেশি ফল, বেশি লাভ",
+    val dashboardSubtitle: String = "সুস্থ গাছে সমৃদ্ধ ফসল",
     val irrigationIntervalDays: Long = 4L,
     val workTypes: List<String> = listOf(
         "নিড়ানি দেওয়া",
@@ -55,6 +55,39 @@ data class FeedingRecipe(
     val steps: List<String> = emptyList(),
     val tip: String = "",
     val orderIndex: Long = 0L,
+    val updatedAt: Timestamp? = null
+)
+
+@Keep
+@IgnoreExtraProperties
+data class FarmArticle(
+    @DocumentId val id: String = "",
+    val title: String = "",
+    val category: String = "সার প্রয়োগ",
+    val summary: String = "",
+    val body: String = "",
+    val publishedDateLabel: String = "",
+    val orderIndex: Long = 0L,
+    val createdAt: Timestamp? = null,
+    val updatedAt: Timestamp? = null
+)
+
+@Keep
+@IgnoreExtraProperties
+data class CustomFeedingPlan(
+    @DocumentId val id: String = "",
+    val userId: String = "",
+    val title: String = "",
+    val method: String = "",
+    val dosage: String = "",
+    val dateMillis: Long = System.currentTimeMillis(),
+    val dateLabel: String = "",
+    val nextDateMillis: Long = 0L,
+    val nextDateLabel: String = "",
+    val notes: String = "",
+    val trashed: Boolean = false,
+    val trashedAtMillis: Long = 0L,
+    val createdAt: Timestamp? = null,
     val updatedAt: Timestamp? = null
 )
 
@@ -117,6 +150,8 @@ data class SprayLog(
     val medicineName: String = "",
     val dose: String = "",
     val cost: Double = 0.0,
+    val nextSprayMillis: Long = 0L,
+    val nextSprayLabel: String = "",
     val notes: String = "",
     val trashed: Boolean = false,
     val trashedAtMillis: Long = 0L,
@@ -162,6 +197,7 @@ data class HarvestSale(
 
 enum class RecordCategory(val bengaliLabel: String) {
     FERTILIZER("সার কেনা"),
+    FEEDING_PLAN("সারের ডোজ"),
     IRRIGATION("সেচ"),
     SPRAY("স্প্রে"),
     LABOR("শ্রমিক"),
@@ -202,6 +238,8 @@ data class FarmSummary(
     val netProfit: Double = 0.0,
     val nextIrrigationLabel: String = "",
     val nextIrrigationPlot: String = "",
+    val nextSprayLabel: String = "",
+    val nextSprayMedicine: String = "",
     val trashedCount: Int = 0
 )
 
@@ -211,6 +249,11 @@ sealed interface UndoAction {
     data class TrashedFertilizer(val item: FertilizerPurchase) : UndoAction
     data class RestoredFertilizer(val item: FertilizerPurchase) : UndoAction
     data class PaidFertilizerDue(val before: FertilizerPurchase, val after: FertilizerPurchase) : UndoAction
+
+    data class AddedFeedingPlan(val item: CustomFeedingPlan) : UndoAction
+    data class EditedFeedingPlan(val before: CustomFeedingPlan, val after: CustomFeedingPlan) : UndoAction
+    data class TrashedFeedingPlan(val item: CustomFeedingPlan) : UndoAction
+    data class RestoredFeedingPlan(val item: CustomFeedingPlan) : UndoAction
 
     data class AddedIrrigation(val item: IrrigationLog) : UndoAction
     data class EditedIrrigation(val before: IrrigationLog, val after: IrrigationLog) : UndoAction
@@ -278,6 +321,40 @@ object DefaultFeedingRecipes {
                 "বিকেলের দিকে গাছের পাতা ও কচি ফলের ওপর ভালোভাবে স্প্রে করে দিন (১০-১২ দিন পরপর)।"
             ),
             tip = "ফুল ফোটার একদম মাঝামাঝি সময়ে স্প্রে করবেন না; ফুল ঝরে ফল ধরার পর স্প্রে করলে সেরা ফল পাওয়া যায়।",
+            orderIndex = 3L
+        )
+    )
+}
+
+object DefaultFarmArticles {
+    val categories = listOf("সার প্রয়োগ", "রোগবালাই দমন", "ফল বড় করার টিপস", "জমি ও চারা পরিচর্যা")
+
+    val items: List<FarmArticle> = listOf(
+        FarmArticle(
+            id = "article_fruit_size",
+            title = "স্ট্রবেরি ফল বড়, উজ্জ্বল ও বেশি মিষ্টি করার সহজ উপায়",
+            category = "ফল বড় করার টিপস",
+            summary = "ফুল থেকে কচি ফল ধরার পর পটাশ ও বোরন সারের পাশাপাশি অনুখাদ্য ও জৈব পুষ্টি কীভাবে কাজ করে তা জানুন।",
+            body = "১) ফল ধরার শুরুতেই গাছ প্রতি ৫ গ্রাম এমওপি (পটাশ) ও সামান্য বোরন মিশিয়ে মাটিতে প্রয়োগ করলে ফলের আকার দ্রুত বড় হয়।\n\n২) প্রতি ১০-১২ দিন পরপর বিকেল বেলায় ১৬ লিটার পানিতে ৫০ গ্রাম হরলিক্স, ১০০ গ্রাম গুড় ও ১৫ গ্রাম চিলেটেড অনুখাদ্য ভালোভাবে গুলে স্প্রে করুন।\n\n৩) মাটিতে কালো বা সিলভার মালচিং পেপার ব্যবহার করলে ফল মাটিতে লেগে পচে না এবং ফলের রঙ টুকটুকে লাল হয়।\n\n৪) গাছে অতিরিক্ত রানার (লতা) বের হলে তা কাঁচি দিয়ে কেটে ফেলুন, তাহলে সব শক্তি সরাসরি ফলে যাবে।",
+            publishedDateLabel = "কৃষি পরামর্শ",
+            orderIndex = 1L
+        ),
+        FarmArticle(
+            id = "article_disease_control",
+            title = "পাতার দাগ ও ফল পচা রোগ দমনে করণীয়",
+            category = "রোগবালাই দমন",
+            summary = "শীত ও কুয়াশায় স্ট্রবেরির পাতায় দাগ ও গোড়া পচা দেখা দিলে দ্রুত সঠিক ব্যবস্থা নিন।",
+            body = "১) সকালের দিকে পাতায় শিশির জমে থাকলে পাতায় লালচে বা বাদামী দাগ দেখা দিতে পারে। আক্রান্ত পুরোনো পাতা জমি থেকে তুলে সরিয়ে ফেলুন।\n\n২) ছত্রাকনাশক হিসেবে প্রতি লিটার পানিতে ২ গ্রাম ম্যানকোজেব অথবা ১ গ্রাম কার্বেন্ডাজিম মিশিয়ে ৭-১০ দিন পরপর স্প্রে করুন।\n\n৩) জমিতে কখনোই পানি জমতে দেবেন না। সেচের পর অতিরিক্ত পানি নিকাশের নালা পরিষ্কার রাখুন।",
+            publishedDateLabel = "রোগ দমন",
+            orderIndex = 2L
+        ),
+        FarmArticle(
+            id = "article_soil_mulching",
+            title = "চারা রোপণের পর মাটির আর্দ্রতা ও নিড়ানি ব্যবস্থাপনা",
+            category = "জমি ও চারা পরিচর্যা",
+            summary = "সুস্থ গাছের জন্য আগাছা দমন ও পরিমিত সেচ খুবই জরুরি।",
+            body = "১) চারা লাগানোর ১৫ দিন পর থেকে নিয়মিত আগাছা বা নিড়ানি পরিষ্কার করুন, এতে মাটির পুষ্টি আগাছা খেতে পারবে না।\n\n২) দুপুরের কড়া রোদে সেচ দেবেন না; ভোর বেলা বা বিকেল ৪টার পর হালকা সেচ দেওয়া সবচেয়ে ভালো।\n\n৩) ৩ থেকে ৪ দিন পরপর মাটির জো দেখে সেচ দিন এবং এই অ্যাপে পরবর্তী সেচের তারিখ লিখে রাখুন।",
+            publishedDateLabel = "বাগান পরিচর্যা",
             orderIndex = 3L
         )
     )

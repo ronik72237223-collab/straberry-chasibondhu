@@ -164,3 +164,69 @@ test("User data isolation and Kotlin payload validation for fertilizer, irrigati
     })
   );
 });
+
+test("Super Admin articles publishing, custom feeding plans isolation, and spray nextSpray fields", async () => {
+  const adminDb = testEnv.authenticatedContext(SUPER_ADMIN_UID).firestore();
+  const aliceDb = testEnv.authenticatedContext(FARMER_A).firestore();
+  const bobDb = testEnv.authenticatedContext(FARMER_B).firestore();
+  const unauthDb = testEnv.unauthenticatedContext().firestore();
+  const now = new Date(Date.now() - 1000);
+
+  await assertSucceeds(
+    adminDb.collection("articles").doc("art_1").set({
+      title: "ফল বড় করার টিপস",
+      category: "ফল বড় করার টিপস",
+      summary: "বিস্তারিত পরামর্শ",
+      body: "প্রতি লিটার পানিতে সঠিক মাপ দিন।",
+      publishedDateLabel: "১৮/১১/২০২৬",
+      orderIndex: 1,
+      createdAt: now,
+      updatedAt: now,
+    })
+  );
+
+  await assertSucceeds(unauthDb.collection("articles").get());
+  await assertFails(
+    aliceDb.collection("articles").doc("art_1").delete()
+  );
+
+  await assertSucceeds(
+    aliceDb.collection("users").doc(FARMER_A).collection("custom_feeding_plans").doc("plan_1").set({
+      userId: FARMER_A,
+      title: "নিজের পকেট গঞ্জ ডোজ",
+      method: "পকেট গঞ্জ",
+      dosage: "৫ গ্রাম প্রতি গাছ",
+      dateMillis: Date.now(),
+      dateLabel: "১৮/১১/২০২৬",
+      nextDateMillis: Date.now() + 864000000,
+      nextDateLabel: "২৮/১১/২০২৬",
+      notes: "",
+      trashed: false,
+      trashedAtMillis: 0,
+      createdAt: now,
+      updatedAt: now,
+    })
+  );
+
+  await assertFails(
+    bobDb.collection("users").doc(FARMER_A).collection("custom_feeding_plans").get()
+  );
+
+  await assertSucceeds(
+    aliceDb.collection("users").doc(FARMER_A).collection("spray_logs").doc("spr_1").set({
+      userId: FARMER_A,
+      dateMillis: Date.now(),
+      dateLabel: "১৮/১১/২০২৬",
+      medicineName: "ম্যানকোজেব",
+      dose: "২ গ্রাম/লিটার",
+      cost: 200,
+      nextSprayMillis: Date.now() + 604800000,
+      nextSprayLabel: "২৫/১১/২০২৬",
+      notes: "",
+      trashed: false,
+      trashedAtMillis: 0,
+      createdAt: now,
+      updatedAt: now,
+    })
+  );
+});

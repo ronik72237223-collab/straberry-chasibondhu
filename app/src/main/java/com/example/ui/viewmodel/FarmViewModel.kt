@@ -5,7 +5,10 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.data.repository.FarmRepository
 import com.example.model.AppConfig
+import com.example.model.CustomFeedingPlan
+import com.example.model.DefaultFarmArticles
 import com.example.model.DefaultFeedingRecipes
+import com.example.model.FarmArticle
 import com.example.model.FarmSummary
 import com.example.model.FeedingRecipe
 import com.example.model.FertilizerPurchase
@@ -36,6 +39,8 @@ import kotlinx.coroutines.launch
 data class FarmDashboardState(
     val appConfig: AppConfig = AppConfig(),
     val recipes: List<FeedingRecipe> = DefaultFeedingRecipes.items,
+    val articles: List<FarmArticle> = DefaultFarmArticles.items,
+    val customFeedingPlans: List<CustomFeedingPlan> = emptyList(),
     val fertilizers: List<FertilizerPurchase> = emptyList(),
     val irrigations: List<IrrigationLog> = emptyList(),
     val sprays: List<SprayLog> = emptyList(),
@@ -89,6 +94,19 @@ class FarmViewModel(
             emit(DefaultFeedingRecipes.items)
         }
 
+    private val articlesFlow = repository.observeArticles()
+        .catch { err ->
+            unwrapOrRethrow(err, "articles")
+            emit(DefaultFarmArticles.items)
+        }
+
+    private val customPlansFlow = repository.observeCustomFeedingPlans()
+        .catch { err ->
+            val msg = unwrapOrRethrow(err, "custom_feeding_plans")
+            _snackbarEvents.tryEmit(msg)
+            emit(emptyList())
+        }
+
     private val fertilizersFlow = repository.observeFertilizers()
         .catch { err ->
             val msg = unwrapOrRethrow(err, "fertilizer_purchases")
@@ -125,13 +143,17 @@ class FarmViewModel(
         }
 
     val uiState: StateFlow<FarmDashboardState> = combine(
-        combine(appConfigFlow, recipesFlow, fertilizersFlow, irrigationsFlow) { cfg, rec, fert, irr ->
-            Quad(cfg, rec, fert, irr)
+        combine(appConfigFlow, recipesFlow, articlesFlow, customPlansFlow) { cfg, rec, art, plans ->
+            Quad(cfg, rec, art, plans)
         },
-        combine(spraysFlow, laborsFlow, harvestsFlow) { spr, lab, har ->
-            Triple(spr, lab, har)
+        combine(fertilizersFlow, irrigationsFlow, spraysFlow) { fert, irr, spr ->
+            Triple(fert, irr, spr)
+        },
+        combine(laborsFlow, harvestsFlow) { lab, har ->
+            Pair(lab, har)
         }
-    ) { (config, recipes, allFert, allIrr), (allSpray, allLabor, allHarvest) ->
+    ) { (config, recipes, articles, allPlans), (allFert, allIrr, allSpray), (allLabor, allHarvest) ->
+        val activePlans = allPlans.filter { !it.trashed }.sortedByDescending { it.dateMillis }
         val activeFert = allFert.filter { !it.trashed }.sortedByDescending { it.dateMillis }
         val activeIrr = allIrr.filter { !it.trashed }.sortedByDescending { it.dateMillis }
         val activeSpray = allSpray.filter { !it.trashed }.sortedByDescending { it.dateMillis }
@@ -139,6 +161,9 @@ class FarmViewModel(
         val activeHarvest = allHarvest.filter { !it.trashed }.sortedByDescending { it.dateMillis }
 
         val trashed = buildList {
+            allPlans.filter { it.trashed }.forEach {
+                add(TrashItem(it.id, RecordCategory.FEEDING_PLAN, it.title, it.dosage.ifBlank { it.method }, 0.0, it.dateLabel, it.trashedAtMillis))
+            }
             allFert.filter { it.trashed }.forEach {
                 add(TrashItem(it.id, RecordCategory.FERTILIZER, it.fertilizerName, it.shopName.ifBlank { it.quantity }, it.totalPrice, it.dateLabel, it.trashedAtMillis))
             }
@@ -187,12 +212,13 @@ class FarmViewModel(
                 )
             }
             activeSpray.forEach {
+                val nextInfo = if (it.nextSprayLabel.isNotBlank()) " • পরবর্তী: ${it.nextSprayLabel}" else ""
                 add(
                     LedgerEntry(
                         id = it.id,
                         category = RecordCategory.SPRAY,
                         title = "স্প্রে: ${it.medicineName}",
-                        detail = it.dose,
+                        detail = "${it.dose}$nextInfo".trim(' ', '•'),
                         amount = it.cost,
                         isIncome = false,
                         dateMillis = it.dateMillis,
@@ -239,10 +265,13 @@ class FarmViewModel(
         val totalSales = activeHarvest.sumOf { it.totalAmount }
         val totalKg = activeHarvest.sumOf { it.weightKg }
         val latestIrr = activeIrr.maxByOrNull { it.dateMillis }
+        val latestSpray = activeSpray.filter { it.nextSprayLabel.isNotBlank() }.maxByOrNull { it.dateMillis }
 
         FarmDashboardState(
             appConfig = config,
             recipes = recipes,
+            articles = articles,
+            customFeedingPlans = activePlans,
             fertilizers = activeFert,
             irrigations = activeIrr,
             sprays = activeSpray,
@@ -262,6 +291,8 @@ class FarmViewModel(
                 netProfit = totalSales - totalExpense,
                 nextIrrigationLabel = latestIrr?.nextIrrigationLabel.orEmpty(),
                 nextIrrigationPlot = latestIrr?.plotName.orEmpty(),
+                nextSprayLabel = latestSpray?.nextSprayLabel.orEmpty(),
+                nextSprayMedicine = latestSpray?.medicineName.orEmpty(),
                 trashedCount = trashed.size
             ),
             isLoaded = true
@@ -276,6 +307,7 @@ class FarmViewModel(
         if (isSuperAdmin) {
             viewModelScope.launch {
                 repository.seedDefaultRecipesIfEmpty()
+                repository.seedDefaultArticlesIfEmpty()
             }
         }
     }
@@ -302,6 +334,39 @@ class FarmViewModel(
 
     fun clearCopiedCalculatorAmount() {
         _copiedCalculatorAmount.value = null
+    }
+
+    // --- Custom Feeding Plan Actions ---
+    fun saveCustomFeedingPlan(existing: CustomFeedingPlan?, item: CustomFeedingPlan) {
+        viewModelScope.launch {
+            if (existing == null) {
+                repository.addCustomFeedingPlan(item)
+                    .onSuccess { saved ->
+                        pushUndo(UndoAction.AddedFeedingPlan(saved))
+                        _snackbarEvents.tryEmit("নিজের সার ডোজ যোগ হয়েছে ✅")
+                    }
+                    .onFailure { _snackbarEvents.tryEmit("সংরক্ষণ ব্যর্থ হয়েছে: ${it.localizedMessage}") }
+            } else {
+                val updated = item.copy(id = existing.id, userId = existing.userId, createdAt = existing.createdAt)
+                repository.updateCustomFeedingPlan(updated)
+                    .onSuccess {
+                        pushUndo(UndoAction.EditedFeedingPlan(existing, updated))
+                        _snackbarEvents.tryEmit("সারের ডোজ আপডেট হয়েছে ✏️")
+                    }
+                    .onFailure { _snackbarEvents.tryEmit("আপডেট ব্যর্থ হয়েছে: ${it.localizedMessage}") }
+            }
+        }
+    }
+
+    fun trashCustomFeedingPlan(item: CustomFeedingPlan) {
+        viewModelScope.launch {
+            val now = System.currentTimeMillis()
+            repository.setCustomFeedingPlanTrashed(item.id, true, now)
+                .onSuccess {
+                    pushUndo(UndoAction.TrashedFeedingPlan(item.copy(trashed = true, trashedAtMillis = now)))
+                    _snackbarEvents.tryEmit("রিসাইকেল বিনে পাঠানো হয়েছে 🗑️")
+                }
+        }
     }
 
     // --- Fertilizer Actions ---
@@ -485,6 +550,7 @@ class FarmViewModel(
     fun restoreTrashItem(item: TrashItem) {
         viewModelScope.launch {
             val res = when (item.category) {
+                RecordCategory.FEEDING_PLAN -> repository.setCustomFeedingPlanTrashed(item.id, false, 0L)
                 RecordCategory.FERTILIZER -> repository.setFertilizerTrashed(item.id, false, 0L)
                 RecordCategory.IRRIGATION -> repository.setIrrigationTrashed(item.id, false, 0L)
                 RecordCategory.SPRAY -> repository.setSprayTrashed(item.id, false, 0L)
@@ -499,6 +565,7 @@ class FarmViewModel(
     fun deleteTrashItemPermanently(item: TrashItem) {
         viewModelScope.launch {
             val res = when (item.category) {
+                RecordCategory.FEEDING_PLAN -> repository.deleteCustomFeedingPlanPermanently(item.id)
                 RecordCategory.FERTILIZER -> repository.deleteFertilizerPermanently(item.id)
                 RecordCategory.IRRIGATION -> repository.deleteIrrigationPermanently(item.id)
                 RecordCategory.SPRAY -> repository.deleteSprayPermanently(item.id)
@@ -528,6 +595,11 @@ class FarmViewModel(
 
         viewModelScope.launch {
             val result = when (action) {
+                is UndoAction.AddedFeedingPlan -> repository.setCustomFeedingPlanTrashed(action.item.id, true, System.currentTimeMillis())
+                is UndoAction.EditedFeedingPlan -> repository.updateCustomFeedingPlan(action.before)
+                is UndoAction.TrashedFeedingPlan -> repository.setCustomFeedingPlanTrashed(action.item.id, false, 0L)
+                is UndoAction.RestoredFeedingPlan -> repository.setCustomFeedingPlanTrashed(action.item.id, true, System.currentTimeMillis())
+
                 is UndoAction.AddedFertilizer -> repository.setFertilizerTrashed(action.item.id, true, System.currentTimeMillis())
                 is UndoAction.EditedFertilizer -> repository.updateFertilizer(action.before)
                 is UndoAction.TrashedFertilizer -> repository.setFertilizerTrashed(action.item.id, false, 0L)
@@ -568,6 +640,11 @@ class FarmViewModel(
 
         viewModelScope.launch {
             val result = when (action) {
+                is UndoAction.AddedFeedingPlan -> repository.setCustomFeedingPlanTrashed(action.item.id, false, 0L)
+                is UndoAction.EditedFeedingPlan -> repository.updateCustomFeedingPlan(action.after)
+                is UndoAction.TrashedFeedingPlan -> repository.setCustomFeedingPlanTrashed(action.item.id, true, System.currentTimeMillis())
+                is UndoAction.RestoredFeedingPlan -> repository.setCustomFeedingPlanTrashed(action.item.id, false, 0L)
+
                 is UndoAction.AddedFertilizer -> repository.setFertilizerTrashed(action.item.id, false, 0L)
                 is UndoAction.EditedFertilizer -> repository.updateFertilizer(action.after)
                 is UndoAction.TrashedFertilizer -> repository.setFertilizerTrashed(action.item.id, true, System.currentTimeMillis())
@@ -628,6 +705,29 @@ class FarmViewModel(
         viewModelScope.launch {
             repository.seedDefaultRecipesIfEmpty()
                 .onSuccess { _snackbarEvents.tryEmit("ডিফল্ট রেসিপি ডাটাবেসে যুক্ত হয়েছে") }
+        }
+    }
+
+    fun saveArticle(article: FarmArticle) {
+        viewModelScope.launch {
+            repository.saveArticle(article)
+                .onSuccess { _snackbarEvents.tryEmit("আর্টিকেল সফলভাবে প্রকাশিত হয়েছে ✅") }
+                .onFailure { _snackbarEvents.tryEmit("আর্টিকেল প্রকাশ ব্যর্থ: ${it.localizedMessage}") }
+        }
+    }
+
+    fun deleteArticle(articleId: String) {
+        viewModelScope.launch {
+            repository.deleteArticle(articleId)
+                .onSuccess { _snackbarEvents.tryEmit("আর্টিকেল মুছে ফেলা হয়েছে") }
+                .onFailure { _snackbarEvents.tryEmit("আর্টিকেল মুছতে ব্যর্থ: ${it.localizedMessage}") }
+        }
+    }
+
+    fun seedDefaultArticles() {
+        viewModelScope.launch {
+            repository.seedDefaultArticlesIfEmpty()
+                .onSuccess { _snackbarEvents.tryEmit("ডিফল্ট কৃষি আর্টিকেল ডাটাবেসে যুক্ত হয়েছে") }
         }
     }
 

@@ -8,6 +8,18 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface FarmDao {
+    @Query("SELECT * FROM local_custom_feeding_plans ORDER BY dateMillis DESC")
+    fun observeCustomFeedingPlans(): Flow<List<LocalCustomFeedingPlanEntity>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertCustomFeedingPlan(item: LocalCustomFeedingPlanEntity)
+
+    @Query("DELETE FROM local_custom_feeding_plans WHERE id = :id")
+    suspend fun deleteCustomFeedingPlan(id: String)
+
+    @Query("DELETE FROM local_custom_feeding_plans WHERE trashed = 1")
+    suspend fun emptyTrashedCustomFeedingPlans()
+
     @Query("SELECT * FROM local_fertilizer_purchases ORDER BY dateMillis DESC")
     fun observeFertilizers(): Flow<List<LocalFertilizerEntity>>
 

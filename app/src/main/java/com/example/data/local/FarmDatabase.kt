@@ -7,13 +7,14 @@ import androidx.room.RoomDatabase
 
 @Database(
     entities = [
+        LocalCustomFeedingPlanEntity::class,
         LocalFertilizerEntity::class,
         LocalIrrigationEntity::class,
         LocalSprayEntity::class,
         LocalLaborEntity::class,
         LocalHarvestEntity::class
     ],
-    version = 1,
+    version = 2,
     exportSchema = false
 )
 abstract class FarmDatabase : RoomDatabase() {
@@ -29,7 +30,10 @@ abstract class FarmDatabase : RoomDatabase() {
                     context.applicationContext,
                     FarmDatabase::class.java,
                     "strawberry_chashi_bondhu.db"
-                ).build().also { INSTANCE = it }
+                )
+                    .fallbackToDestructiveMigration(dropAllTables = false)
+                    .build()
+                    .also { INSTANCE = it }
             }
         }
     }

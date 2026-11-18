@@ -1,7 +1,10 @@
 package com.example.data.repository
 
 import com.example.model.AppConfig
+import com.example.model.CustomFeedingPlan
+import com.example.model.DefaultFarmArticles
 import com.example.model.DefaultFeedingRecipes
+import com.example.model.FarmArticle
 import com.example.model.FeedingRecipe
 import com.example.model.FertilizerPurchase
 import com.example.model.HarvestSale
@@ -118,6 +121,28 @@ class FirestoreFarmRepository(
                 emit(DefaultFeedingRecipes.items)
             }
 
+    override fun observeArticles(): Flow<List<FarmArticle>> =
+        db.collection("articles")
+            .snapshots()
+            .map { snapshot ->
+                val list = snapshot.toObjects(
+                    FarmArticle::class.java,
+                    DocumentSnapshot.ServerTimestampBehavior.ESTIMATE
+                )
+                if (list.isEmpty()) DefaultFarmArticles.items else list.sortedBy { it.orderIndex }
+            }
+            .catch { error ->
+                val firestoreError = generateSequence(error) { it.cause }
+                    .filterIsInstance<FirebaseFirestoreException>()
+                    .firstOrNull()
+                if (firestoreError == null && error is CancellationException) throw error
+                handleFirestoreError(firestoreError ?: error, OperationType.LIST, "articles")
+                emit(DefaultFarmArticles.items)
+            }
+
+    override fun observeCustomFeedingPlans(): Flow<List<CustomFeedingPlan>> =
+        observeUserCollection("custom_feeding_plans")
+
     override fun observeFertilizers(): Flow<List<FertilizerPurchase>> =
         observeUserCollection("fertilizer_purchases")
 
@@ -132,6 +157,75 @@ class FirestoreFarmRepository(
 
     override fun observeHarvests(): Flow<List<HarvestSale>> =
         observeUserCollection("harvest_sales")
+
+    // --- Custom Feeding Plan CRUD ---
+    override suspend fun addCustomFeedingPlan(item: CustomFeedingPlan): Result<CustomFeedingPlan> {
+        var docPath = "users/$userId/custom_feeding_plans"
+        return try {
+            val uid = requireActiveUid()
+            val col = db.collection("users").document(uid).collection("custom_feeding_plans")
+            val docRef = if (item.id.isNotBlank()) col.document(item.id) else col.document()
+            docPath = docRef.path
+            val payload = mapOf(
+                "userId" to uid,
+                "title" to item.title.trim().take(160),
+                "method" to item.method.trim().take(120),
+                "dosage" to item.dosage.trim().take(300),
+                "dateMillis" to item.dateMillis,
+                "dateLabel" to item.dateLabel.take(40),
+                "nextDateMillis" to item.nextDateMillis.coerceAtLeast(0L),
+                "nextDateLabel" to item.nextDateLabel.take(40),
+                "notes" to item.notes.trim().take(500),
+                "trashed" to item.trashed,
+                "trashedAtMillis" to item.trashedAtMillis,
+                "createdAt" to FieldValue.serverTimestamp(),
+                "updatedAt" to FieldValue.serverTimestamp()
+            )
+            docRef.set(payload).await()
+            Result.success(item.copy(id = docRef.id, userId = uid))
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            handleFirestoreError(e, OperationType.CREATE, docPath)
+            Result.failure(e)
+        }
+    }
+
+    override suspend fun updateCustomFeedingPlan(item: CustomFeedingPlan): Result<Unit> {
+        val docPath = "users/$userId/custom_feeding_plans/${item.id}"
+        return try {
+            val uid = requireActiveUid()
+            require(item.id.isNotBlank()) { "Document ID cannot be blank" }
+            db.collection("users").document(uid).collection("custom_feeding_plans").document(item.id)
+                .update(
+                    mapOf(
+                        "title" to item.title.trim().take(160),
+                        "method" to item.method.trim().take(120),
+                        "dosage" to item.dosage.trim().take(300),
+                        "dateMillis" to item.dateMillis,
+                        "dateLabel" to item.dateLabel.take(40),
+                        "nextDateMillis" to item.nextDateMillis.coerceAtLeast(0L),
+                        "nextDateLabel" to item.nextDateLabel.take(40),
+                        "notes" to item.notes.trim().take(500),
+                        "trashed" to item.trashed,
+                        "trashedAtMillis" to item.trashedAtMillis,
+                        "updatedAt" to FieldValue.serverTimestamp()
+                    )
+                ).await()
+            Result.success(Unit)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            handleFirestoreError(e, OperationType.UPDATE, docPath)
+            Result.failure(e)
+        }
+    }
+
+    override suspend fun setCustomFeedingPlanTrashed(id: String, trashed: Boolean, trashedAtMillis: Long): Result<Unit> =
+        partialTrashUpdate("custom_feeding_plans", id, trashed, trashedAtMillis)
+
+    override suspend fun deleteCustomFeedingPlanPermanently(id: String): Result<Unit> =
+        deleteDocument("custom_feeding_plans", id)
 
     // --- Fertilizer CRUD ---
     override suspend fun addFertilizer(item: FertilizerPurchase): Result<FertilizerPurchase> {
@@ -300,6 +394,8 @@ class FirestoreFarmRepository(
                 "medicineName" to item.medicineName.trim().take(140),
                 "dose" to item.dose.trim().take(120),
                 "cost" to item.cost.coerceAtLeast(0.0),
+                "nextSprayMillis" to item.nextSprayMillis.coerceAtLeast(0L),
+                "nextSprayLabel" to item.nextSprayLabel.take(40),
                 "notes" to item.notes.trim().take(500),
                 "trashed" to item.trashed,
                 "trashedAtMillis" to item.trashedAtMillis,
@@ -329,6 +425,8 @@ class FirestoreFarmRepository(
                         "medicineName" to item.medicineName.trim().take(140),
                         "dose" to item.dose.trim().take(120),
                         "cost" to item.cost.coerceAtLeast(0.0),
+                        "nextSprayMillis" to item.nextSprayMillis.coerceAtLeast(0L),
+                        "nextSprayLabel" to item.nextSprayLabel.take(40),
                         "notes" to item.notes.trim().take(500),
                         "trashed" to item.trashed,
                         "trashedAtMillis" to item.trashedAtMillis,
@@ -533,6 +631,7 @@ class FirestoreFarmRepository(
         return try {
             val uid = requireActiveUid()
             val collections = listOf(
+                "custom_feeding_plans",
                 "fertilizer_purchases",
                 "irrigation_logs",
                 "spray_logs",
@@ -639,6 +738,80 @@ class FirestoreFarmRepository(
             throw e
         } catch (e: Exception) {
             handleFirestoreError(e, OperationType.WRITE, "feeding_recipes")
+            Result.failure(e)
+        }
+    }
+
+    override suspend fun saveArticle(article: FarmArticle): Result<FarmArticle> {
+        var path = "articles"
+        return try {
+            requireSuperAdmin()
+            val col = db.collection("articles")
+            val docRef = if (article.id.isNotBlank()) col.document(article.id) else col.document()
+            path = docRef.path
+            val snap = if (article.id.isNotBlank()) docRef.get().await() else null
+            if (snap != null && snap.exists()) {
+                val payload = mapOf(
+                    "title" to article.title.trim().take(200),
+                    "category" to article.category.trim().take(80),
+                    "summary" to article.summary.trim().take(500),
+                    "body" to article.body.trim().take(5000),
+                    "publishedDateLabel" to article.publishedDateLabel.trim().take(60),
+                    "orderIndex" to article.orderIndex.coerceIn(0L, 2000L),
+                    "createdAt" to (snap.getTimestamp("createdAt") ?: FieldValue.serverTimestamp()),
+                    "updatedAt" to FieldValue.serverTimestamp()
+                )
+                docRef.set(payload).await()
+            } else {
+                val payload = mapOf(
+                    "title" to article.title.trim().take(200),
+                    "category" to article.category.trim().take(80),
+                    "summary" to article.summary.trim().take(500),
+                    "body" to article.body.trim().take(5000),
+                    "publishedDateLabel" to article.publishedDateLabel.trim().take(60),
+                    "orderIndex" to article.orderIndex.coerceIn(0L, 2000L),
+                    "createdAt" to FieldValue.serverTimestamp(),
+                    "updatedAt" to FieldValue.serverTimestamp()
+                )
+                docRef.set(payload).await()
+            }
+            Result.success(article.copy(id = docRef.id))
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            handleFirestoreError(e, OperationType.WRITE, path)
+            Result.failure(e)
+        }
+    }
+
+    override suspend fun deleteArticle(articleId: String): Result<Unit> {
+        val path = "articles/$articleId"
+        return try {
+            requireSuperAdmin()
+            db.collection("articles").document(articleId).delete().await()
+            Result.success(Unit)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            handleFirestoreError(e, OperationType.DELETE, path)
+            Result.failure(e)
+        }
+    }
+
+    override suspend fun seedDefaultArticlesIfEmpty(): Result<Unit> {
+        return try {
+            requireSuperAdmin()
+            val existing = db.collection("articles").limit(1).get().await()
+            if (existing.isEmpty) {
+                for (article in DefaultFarmArticles.items) {
+                    saveArticle(article)
+                }
+            }
+            Result.success(Unit)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            handleFirestoreError(e, OperationType.WRITE, "articles")
             Result.failure(e)
         }
     }

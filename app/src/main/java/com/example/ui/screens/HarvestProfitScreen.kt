@@ -33,13 +33,19 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Tab
+import androidx.compose.material3.TabRow
+import androidx.compose.material3.TabRowDefaults
+import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -72,6 +78,7 @@ import com.example.util.BengaliFormatters
 @Composable
 fun HarvestProfitScreen(
     state: FarmDashboardState,
+    initialTab: Int = 0,
     copiedCalculatorAmount: String?,
     canUndo: Boolean,
     canRedo: Boolean,
@@ -82,6 +89,7 @@ fun HarvestProfitScreen(
     onTrashHarvest: (HarvestSale) -> Unit,
     onClearCopiedAmount: () -> Unit
 ) {
+    var selectedTab by rememberSaveable(initialTab) { mutableIntStateOf(initialTab.coerceIn(0, 1)) }
     var showDialog by remember { mutableStateOf(false) }
     var editingItem by remember { mutableStateOf<HarvestSale?>(null) }
 
@@ -116,175 +124,243 @@ fun HarvestProfitScreen(
             }
         }
     ) { innerPadding ->
-        LazyColumn(
+        Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(innerPadding),
-            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 14.dp, bottom = 140.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+                .padding(innerPadding)
         ) {
-            // Big Profit & Expense Comparison Card
-            item {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(22.dp),
-                    colors = CardDefaults.cardColors(containerColor = SurfacePureWhite),
-                    border = BorderStroke(1.5.dp, if (summary.netProfit >= 0) EmeraldBorder else StrawberryBorder)
-                ) {
-                    Column(modifier = Modifier.padding(18.dp)) {
-                        Text(
-                            text = "মোট লাভ-ক্ষতির হিসাব",
-                            style = MaterialTheme.typography.titleLarge.copy(color = TextDarkBlack, fontWeight = FontWeight.Bold)
-                        )
-                        Spacer(modifier = Modifier.height(12.dp))
-
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
-                        ) {
-                            Surface(
-                                modifier = Modifier.weight(1f),
-                                shape = RoundedCornerShape(14.dp),
-                                color = EmeraldSoftBg,
-                                border = BorderStroke(1.dp, EmeraldBorder)
-                            ) {
-                                Column(modifier = Modifier.padding(12.dp)) {
-                                    Text("মোট বিক্রি (আয়)", color = TextSecondaryDark, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-                                    Text(
-                                        text = BengaliFormatters.formatTaka(summary.totalSales),
-                                        color = EmeraldPrimary,
-                                        fontSize = 20.sp,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                    Text(
-                                        text = "মোট ফলন: ${BengaliFormatters.formatKg(summary.totalHarvestKg)}",
-                                        color = TextDarkBlack,
-                                        fontSize = 13.sp
-                                    )
-                                }
-                            }
-                            Surface(
-                                modifier = Modifier.weight(1f),
-                                shape = RoundedCornerShape(14.dp),
-                                color = StrawberrySoftBg,
-                                border = BorderStroke(1.dp, StrawberryBorder)
-                            ) {
-                                Column(modifier = Modifier.padding(12.dp)) {
-                                    Text("মোট খরচ", color = TextSecondaryDark, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-                                    Text(
-                                        text = BengaliFormatters.formatTaka(summary.totalExpense),
-                                        color = StrawberryRed,
-                                        fontSize = 20.sp,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                    Text(
-                                        text = "সার+সেচ+স্প্রে+শ্রমিক",
-                                        color = TextDarkBlack,
-                                        fontSize = 13.sp
-                                    )
-                                }
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.height(14.dp))
-                        HorizontalDivider(color = BorderSoft)
-                        Spacer(modifier = Modifier.height(12.dp))
-
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = if (summary.netProfit >= 0) "নিট লাভ:" else "নিট ঘাটতি:",
-                                style = MaterialTheme.typography.titleLarge.copy(color = TextDarkBlack, fontWeight = FontWeight.Bold)
-                            )
-                            Text(
-                                text = BengaliFormatters.formatTaka(kotlin.math.abs(summary.netProfit)),
-                                style = MaterialTheme.typography.headlineMedium.copy(
-                                    color = if (summary.netProfit >= 0) EmeraldPrimary else StrawberryRed,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            )
-                        }
-
-                        Spacer(modifier = Modifier.height(12.dp))
-                        Text(
-                            text = "খরচের খাতসমূহ:",
-                            style = MaterialTheme.typography.titleSmall.copy(color = TextDarkBlack, fontWeight = FontWeight.Bold)
-                        )
-                        Spacer(modifier = Modifier.height(6.dp))
-                        val maxExp = maxOf(summary.totalExpense, 1.0)
-                        ExpenseBarRow("সার কেনা", summary.fertilizerTotal, maxExp, EmeraldPrimary)
-                        ExpenseBarRow("সেচ খরচ", summary.irrigationTotal, maxExp, SkyBlueAccent)
-                        ExpenseBarRow("ওষুধ স্প্রে", summary.sprayTotal, maxExp, TealAccent)
-                        ExpenseBarRow("শ্রমিক মজুরি", summary.laborTotal, maxExp, PurpleAccent)
-                    }
+            TabRow(
+                selectedTabIndex = selectedTab,
+                containerColor = SurfacePureWhite,
+                contentColor = TextDarkBlack,
+                indicator = { tabPositions ->
+                    TabRowDefaults.SecondaryIndicator(
+                        modifier = Modifier.tabIndicatorOffset(tabPositions[selectedTab]),
+                        color = StrawberryRed,
+                        height = 3.dp
+                    )
                 }
-            }
-
-            item {
-                Text(
-                    text = "দৈনিক স্ট্রবেরি বিক্রির খাতা",
-                    style = MaterialTheme.typography.titleLarge.copy(color = TextDarkBlack, fontWeight = FontWeight.Bold)
+            ) {
+                Tab(
+                    selected = selectedTab == 0,
+                    onClick = { selectedTab = 0 },
+                    modifier = Modifier.heightIn(min = 52.dp).testTag("tab_sales_log"),
+                    text = { Text("বিক্রির হিসাব", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = TextDarkBlack) }
+                )
+                Tab(
+                    selected = selectedTab == 1,
+                    onClick = { selectedTab = 1 },
+                    modifier = Modifier.heightIn(min = 52.dp).testTag("tab_profit_summary"),
+                    text = { Text("লাভ-ক্ষতি দেখুন", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = TextDarkBlack) }
                 )
             }
 
-            if (state.harvests.isEmpty()) {
-                item {
-                    EmptyStateCard(
-                        icon = Icons.Default.TrendingUp,
-                        title = "এখনো কোনো ফসল বিক্রির হিসাব নেই",
-                        subtitle = "আজকে কত কেজি স্ট্রবেরি কত টাকায় বিক্রি করলেন তা এখানে লিখে রাখুন।",
-                        actionLabel = "বিক্রি যোগ করুন",
-                        onAction = { editingItem = null; showDialog = true }
-                    )
-                }
-            } else {
-                items(state.harvests, key = { it.id }) { item ->
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(20.dp),
-                        colors = CardDefaults.cardColors(containerColor = SurfacePureWhite),
-                        border = BorderStroke(1.5.dp, StrawberryBorder)
-                    ) {
-                        Column(modifier = Modifier.padding(16.dp)) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.Top
-                            ) {
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = "${BengaliFormatters.formatKg(item.weightKg)} স্ট্রবেরি বিক্রি",
-                                        style = MaterialTheme.typography.titleMedium.copy(color = TextDarkBlack, fontWeight = FontWeight.Bold)
-                                    )
-                                    Text(
-                                        text = "${item.dateLabel}${if (item.buyerName.isNotBlank()) " • ${item.buyerName}" else ""}",
-                                        style = MaterialTheme.typography.bodyMedium.copy(color = TextSecondaryDark)
-                                    )
-                                    if (item.pricePerKg > 0) {
-                                        Text(
-                                            text = "দর: ${BengaliFormatters.formatTaka(item.pricePerKg)} / কেজি",
-                                            style = MaterialTheme.typography.bodySmall.copy(color = TextSecondaryDark)
-                                        )
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 14.dp, bottom = 140.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                if (selectedTab == 1) {
+                    item {
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(22.dp),
+                            colors = CardDefaults.cardColors(containerColor = SurfacePureWhite),
+                            border = BorderStroke(1.5.dp, if (summary.netProfit >= 0) EmeraldBorder else StrawberryBorder)
+                        ) {
+                            Column(modifier = Modifier.padding(18.dp)) {
+                                Text(
+                                    text = "মোট লাভ-ক্ষতির হিসাব",
+                                    style = MaterialTheme.typography.titleLarge.copy(color = TextDarkBlack, fontWeight = FontWeight.Bold)
+                                )
+                                Spacer(modifier = Modifier.height(12.dp))
+
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                ) {
+                                    Surface(
+                                        modifier = Modifier.weight(1f),
+                                        shape = RoundedCornerShape(14.dp),
+                                        color = EmeraldSoftBg,
+                                        border = BorderStroke(1.dp, EmeraldBorder)
+                                    ) {
+                                        Column(modifier = Modifier.padding(12.dp)) {
+                                            Text("মোট বিক্রি (আয়)", color = TextSecondaryDark, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                                            Text(
+                                                text = BengaliFormatters.formatTaka(summary.totalSales),
+                                                color = EmeraldPrimary,
+                                                fontSize = 20.sp,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                            Text(
+                                                text = "মোট ফলন: ${BengaliFormatters.formatKg(summary.totalHarvestKg)}",
+                                                color = TextDarkBlack,
+                                                fontSize = 13.sp
+                                            )
+                                        }
+                                    }
+                                    Surface(
+                                        modifier = Modifier.weight(1f),
+                                        shape = RoundedCornerShape(14.dp),
+                                        color = StrawberrySoftBg,
+                                        border = BorderStroke(1.dp, StrawberryBorder)
+                                    ) {
+                                        Column(modifier = Modifier.padding(12.dp)) {
+                                            Text("মোট খরচ", color = TextSecondaryDark, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                                            Text(
+                                                text = BengaliFormatters.formatTaka(summary.totalExpense),
+                                                color = StrawberryRed,
+                                                fontSize = 20.sp,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                            Text(
+                                                text = "সার+সেচ+স্প্রে+শ্রমিক",
+                                                color = TextDarkBlack,
+                                                fontSize = 13.sp
+                                            )
+                                        }
                                     }
                                 }
+
+                                Spacer(modifier = Modifier.height(14.dp))
+                                HorizontalDivider(color = BorderSoft)
+                                Spacer(modifier = Modifier.height(12.dp))
+
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = if (summary.netProfit >= 0) "নিট লাভ:" else "নিট ঘাটতি:",
+                                        style = MaterialTheme.typography.titleLarge.copy(color = TextDarkBlack, fontWeight = FontWeight.Bold)
+                                    )
+                                    Text(
+                                        text = BengaliFormatters.formatTaka(kotlin.math.abs(summary.netProfit)),
+                                        style = MaterialTheme.typography.headlineMedium.copy(
+                                            color = if (summary.netProfit >= 0) EmeraldPrimary else StrawberryRed,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    )
+                                }
+
+                                Spacer(modifier = Modifier.height(12.dp))
                                 Text(
-                                    text = BengaliFormatters.formatTaka(item.totalAmount),
-                                    style = MaterialTheme.typography.titleLarge.copy(color = EmeraldPrimary, fontWeight = FontWeight.Bold)
+                                    text = "খরচের খাতসমূহ:",
+                                    style = MaterialTheme.typography.titleSmall.copy(color = TextDarkBlack, fontWeight = FontWeight.Bold)
                                 )
-                            }
-                            if (item.notes.isNotBlank()) {
                                 Spacer(modifier = Modifier.height(6.dp))
-                                Text("নোট: ${item.notes}", style = MaterialTheme.typography.bodySmall.copy(color = TextSecondaryDark))
+                                val maxExp = maxOf(summary.totalExpense, 1.0)
+                                ExpenseBarRow("সার কেনা", summary.fertilizerTotal, maxExp, EmeraldPrimary)
+                                ExpenseBarRow("সেচ খরচ", summary.irrigationTotal, maxExp, SkyBlueAccent)
+                                ExpenseBarRow("ওষুধ স্প্রে", summary.sprayTotal, maxExp, TealAccent)
+                                ExpenseBarRow("শ্রমিক মজুরি", summary.laborTotal, maxExp, PurpleAccent)
                             }
-                            Spacer(modifier = Modifier.height(10.dp))
-                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                                InlineEditDeleteRow(
-                                    onEdit = { editingItem = item; showDialog = true },
-                                    onDelete = { onTrashHarvest(item) }
-                                )
+                        }
+                    }
+                } else {
+                    item {
+                        Card(
+                            onClick = { selectedTab = 1 },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(18.dp),
+                            colors = CardDefaults.cardColors(containerColor = SurfacePureWhite),
+                            border = BorderStroke(1.5.dp, EmeraldBorder)
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(14.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column {
+                                    Text("মোট বিক্রি (${BengaliFormatters.formatKg(summary.totalHarvestKg)})", color = TextSecondaryDark, fontSize = 13.sp)
+                                    Text(
+                                        text = BengaliFormatters.formatTaka(summary.totalSales),
+                                        color = EmeraldPrimary,
+                                        fontSize = 22.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                                Column(horizontalAlignment = Alignment.End) {
+                                    Text(if (summary.netProfit >= 0) "নিট লাভ" else "ঘাটতি", color = TextSecondaryDark, fontSize = 13.sp)
+                                    Text(
+                                        text = BengaliFormatters.formatTaka(kotlin.math.abs(summary.netProfit)),
+                                        color = if (summary.netProfit >= 0) EmeraldPrimary else StrawberryRed,
+                                        fontSize = 19.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                item {
+                    Text(
+                        text = "দৈনিক স্ট্রবেরি বিক্রির খাতা",
+                        style = MaterialTheme.typography.titleLarge.copy(color = TextDarkBlack, fontWeight = FontWeight.Bold)
+                    )
+                }
+
+                if (state.harvests.isEmpty()) {
+                    item {
+                        EmptyStateCard(
+                            icon = Icons.Default.TrendingUp,
+                            title = "এখনো কোনো ফসল বিক্রির হিসাব নেই",
+                            subtitle = "আজকে কত কেজি স্ট্রবেরি কত টাকায় বিক্রি করলেন তা এখানে লিখে রাখুন।",
+                            actionLabel = "বিক্রি যোগ করুন",
+                            onAction = { editingItem = null; showDialog = true }
+                        )
+                    }
+                } else {
+                    items(state.harvests, key = { it.id }) { item ->
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(20.dp),
+                            colors = CardDefaults.cardColors(containerColor = SurfacePureWhite),
+                            border = BorderStroke(1.5.dp, StrawberryBorder)
+                        ) {
+                            Column(modifier = Modifier.padding(16.dp)) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.Top
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = "${BengaliFormatters.formatKg(item.weightKg)} স্ট্রবেরি বিক্রি",
+                                            style = MaterialTheme.typography.titleMedium.copy(color = TextDarkBlack, fontWeight = FontWeight.Bold)
+                                        )
+                                        Text(
+                                            text = "${item.dateLabel}${if (item.buyerName.isNotBlank()) " • ${item.buyerName}" else ""}",
+                                            style = MaterialTheme.typography.bodyMedium.copy(color = TextSecondaryDark)
+                                        )
+                                        if (item.pricePerKg > 0) {
+                                            Text(
+                                                text = "দর: ${BengaliFormatters.formatTaka(item.pricePerKg)} / কেজি",
+                                                style = MaterialTheme.typography.bodySmall.copy(color = TextSecondaryDark)
+                                            )
+                                        }
+                                    }
+                                    Text(
+                                        text = BengaliFormatters.formatTaka(item.totalAmount),
+                                        style = MaterialTheme.typography.titleLarge.copy(color = EmeraldPrimary, fontWeight = FontWeight.Bold)
+                                    )
+                                }
+                                if (item.notes.isNotBlank()) {
+                                    Spacer(modifier = Modifier.height(6.dp))
+                                    Text("নোট: ${item.notes}", style = MaterialTheme.typography.bodySmall.copy(color = TextSecondaryDark))
+                                }
+                                Spacer(modifier = Modifier.height(10.dp))
+                                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                                    InlineEditDeleteRow(
+                                        onEdit = { editingItem = item; showDialog = true },
+                                        onDelete = { onTrashHarvest(item) }
+                                    )
+                                }
                             }
                         }
                     }

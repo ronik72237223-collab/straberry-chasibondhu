@@ -1,6 +1,8 @@
 package com.example.data.repository
 
 import com.example.model.AppConfig
+import com.example.model.CustomFeedingPlan
+import com.example.model.FarmArticle
 import com.example.model.FeedingRecipe
 import com.example.model.FertilizerPurchase
 import com.example.model.HarvestSale
@@ -13,12 +15,20 @@ import kotlinx.coroutines.flow.Flow
 interface FarmRepository {
     fun observeAppConfig(): Flow<AppConfig>
     fun observeFeedingRecipes(): Flow<List<FeedingRecipe>>
+    fun observeArticles(): Flow<List<FarmArticle>>
 
+    fun observeCustomFeedingPlans(): Flow<List<CustomFeedingPlan>>
     fun observeFertilizers(): Flow<List<FertilizerPurchase>>
     fun observeIrrigations(): Flow<List<IrrigationLog>>
     fun observeSprays(): Flow<List<SprayLog>>
     fun observeLabors(): Flow<List<LaborLog>>
     fun observeHarvests(): Flow<List<HarvestSale>>
+
+    // Custom Feeding Plan CRUD
+    suspend fun addCustomFeedingPlan(item: CustomFeedingPlan): Result<CustomFeedingPlan>
+    suspend fun updateCustomFeedingPlan(item: CustomFeedingPlan): Result<Unit>
+    suspend fun setCustomFeedingPlanTrashed(id: String, trashed: Boolean, trashedAtMillis: Long): Result<Unit>
+    suspend fun deleteCustomFeedingPlanPermanently(id: String): Result<Unit>
 
     // Fertilizer CRUD
     suspend fun addFertilizer(item: FertilizerPurchase): Result<FertilizerPurchase>
@@ -59,5 +69,8 @@ interface FarmRepository {
     suspend fun saveFeedingRecipe(recipe: FeedingRecipe): Result<FeedingRecipe>
     suspend fun deleteFeedingRecipe(recipeId: String): Result<Unit>
     suspend fun seedDefaultRecipesIfEmpty(): Result<Unit>
+    suspend fun saveArticle(article: FarmArticle): Result<FarmArticle>
+    suspend fun deleteArticle(articleId: String): Result<Unit>
+    suspend fun seedDefaultArticlesIfEmpty(): Result<Unit>
     suspend fun fetchRegisteredUsers(): Result<List<UserProfile>>
 }
